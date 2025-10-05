@@ -12,11 +12,6 @@ export default function Coordinador() {
     { id: "T-003", name: "Luis Fernández", status: "Disponible", activeOrders: 0 },
   ];
 
-  const mockImpediments = [
-    { id: "IMP-001", order: "OS-015", issue: "Falta de repuestos", priority: "Alta" },
-    { id: "IMP-002", order: "OS-018", issue: "Cliente no disponible", priority: "Media" },
-  ];
-
   return (
     <Layout role="coordinator">
       <div className="space-y-6">
@@ -83,37 +78,11 @@ export default function Coordinador() {
                 </div>
               ))}
             </div>
-            <Button className="w-full mt-4">Ver Todos los Técnicos</Button>
+            <Button className="w-full mt-4" asChild>
+              <Link to="/coordinador/tecnicos">Ver Todos los Técnicos</Link>
+            </Button>
           </DashboardCard>
 
-          <DashboardCard
-            title="Impedimentos Activos"
-            description="Problemas que requieren atención"
-            icon={AlertCircle}
-          >
-            <div className="space-y-3">
-              {mockImpediments.map((imp) => (
-                <div
-                  key={imp.id}
-                  className="p-4 rounded-lg border bg-card space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium">{imp.order}</p>
-                    <Badge variant={imp.priority === "Alta" ? "destructive" : "secondary"}>
-                      {imp.priority}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{imp.issue}</p>
-                  <Button size="sm" variant="outline" className="w-full" asChild>
-                    <Link to="/coordinador/impedimentos">Resolver</Link>
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </DashboardCard>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
           <DashboardCard
             title="Asignar/Reasignar Órdenes"
             description="Gestionar asignaciones"
@@ -126,20 +95,20 @@ export default function Coordinador() {
               </Link>
             </Button>
           </DashboardCard>
-
-          <DashboardCard
-            title="Gestionar Citas de Servicio"
-            description="Calendario de servicios"
-            icon={Calendar}
-          >
-            <Button variant="outline" className="w-full" asChild>
-              <Link to="/coordinador/citas">
-                <Calendar className="mr-2 h-4 w-4" />
-                Ver Calendario
-              </Link>
-            </Button>
-          </DashboardCard>
         </div>
+
+        <DashboardCard
+          title="Gestionar Citas de Servicio"
+          description="Calendario de servicios"
+          icon={Calendar}
+        >
+          <Button variant="outline" className="w-full" asChild>
+            <Link to="/coordinador/citas">
+              <Calendar className="mr-2 h-4 w-4" />
+              Ver Calendario
+            </Link>
+          </Button>
+        </DashboardCard>
       </div>
     </Layout>
   );

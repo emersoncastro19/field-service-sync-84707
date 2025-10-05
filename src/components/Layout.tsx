@@ -2,7 +2,8 @@ import { ReactNode, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { 
   Home, Users, Wrench, MapPin, Settings, FileText, HelpCircle, 
-  Menu, X, LogOut, ChevronRight, BarChart3
+  Menu, X, LogOut, BarChart3, Bell, Calendar,
+  Plus, History, Play, Camera, AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -14,32 +15,41 @@ interface LayoutProps {
 
 const menuItems = {
   client: [
-    { icon: Home, label: "Panel del Cliente", path: "/cliente" },
+    { icon: Home, label: "Panel de Control", path: "/cliente" },
     { icon: FileText, label: "Órdenes de Servicio", path: "/cliente/ordenes" },
+    { icon: Users, label: "Citas", path: "/cliente/citas" },
+    { icon: Settings, label: "Perfil y Configuración", path: "/cliente/perfil" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   agent: [
-    { icon: Home, label: "Panel del Agente", path: "/agente" },
-    { icon: Users, label: "Buscar Cliente", path: "/agente/buscar" },
-    { icon: FileText, label: "Órdenes", path: "/agente/ordenes" },
+    { icon: Home, label: "Órdenes Recientes", path: "/agente" },
+    { icon: Users, label: "Buscar Clientes", path: "/agente/buscar" },
+    { icon: Plus, label: "Crear Nueva Orden", path: "/agente/nueva-orden" },
+    { icon: History, label: "Consultar Historial", path: "/agente/historial" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   coordinator: [
     { icon: Home, label: "Panel del Coordinador", path: "/coordinador" },
-    { icon: MapPin, label: "Asignar Órdenes", path: "/coordinador/asignar" },
-    { icon: Wrench, label: "Técnicos", path: "/coordinador/tecnicos" },
+    { icon: Calendar, label: "Gestionar Citas de Servicio", path: "/coordinador/citas" },
+    { icon: MapPin, label: "Asignar o Reasignar Órdenes", path: "/coordinador/asignar" },
     { icon: BarChart3, label: "Reportes", path: "/reportes" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   technician: [
     { icon: Home, label: "Panel del Técnico", path: "/tecnico" },
     { icon: FileText, label: "Órdenes Asignadas", path: "/tecnico/ordenes" },
-    { icon: Wrench, label: "Especialidades", path: "/tecnico/especialidades" },
+    { icon: Wrench, label: "Gestionar Ejecución de Servicio", path: "/tecnico/gestionar-ejecucion", subItems: [
+      { icon: Play, label: "Iniciar/Finalizar Trabajo", path: "/tecnico/gestionar-ejecucion" },
+      { icon: Camera, label: "Documentar Servicio", path: "/tecnico/documentar" },
+    ]},
+    { icon: AlertCircle, label: "Reportar Impedimentos", path: "/tecnico/reportar-impedimento" },
+    { icon: Wrench, label: "Gestionar Especialidades", path: "/tecnico/especialidades" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   admin: [
     { icon: Home, label: "Administración", path: "/admin" },
     { icon: Users, label: "Gestión de Usuarios", path: "/admin/usuarios" },
+    { icon: Bell, label: "Motor de Notificaciones", path: "/admin/notificaciones" },
     { icon: Settings, label: "Herramientas", path: "/herramientas" },
     { icon: BarChart3, label: "Reportes", path: "/reportes" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
@@ -75,12 +85,18 @@ export default function Layout({ children, role = "client" }: LayoutProps) {
             </Link>
           </div>
           
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/" className="flex items-center gap-2">
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Cerrar Sesión</span>
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-4 w-4" />
+              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive"></span>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/" className="flex items-center gap-2">
+                <LogOut className="h-4 w-4" />
+                <span className="hidden sm:inline">Cerrar Sesión</span>
+              </Link>
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -112,7 +128,6 @@ export default function Layout({ children, role = "client" }: LayoutProps) {
                 >
                   <Icon className="h-5 w-5" />
                   <span className="flex-1">{item.label}</span>
-                  {isActive && <ChevronRight className="h-4 w-4" />}
                 </Link>
               );
             })}

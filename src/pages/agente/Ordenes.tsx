@@ -3,6 +3,7 @@ import { FileText, Clock, CheckCircle, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 const mockOrders = [
   { id: "OS-101", client: "Carlos Rodríguez", service: "Reparación de PC", status: "in_progress", date: "2024-01-20" },
@@ -41,7 +42,7 @@ export default function AgenteOrdenes() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-2 gap-4 text-sm mb-4">
                   <div>
                     <p className="text-muted-foreground">Servicio</p>
                     <p className="font-medium">{order.service}</p>
@@ -51,6 +52,9 @@ export default function AgenteOrdenes() {
                     <p className="font-medium">{order.date}</p>
                   </div>
                 </div>
+                <Button variant="outline" className="w-full" asChild>
+                  <Link to="/agente/detalles-orden">Ver Detalles</Link>
+                </Button>
               </CardContent>
             </Card>
           ))}

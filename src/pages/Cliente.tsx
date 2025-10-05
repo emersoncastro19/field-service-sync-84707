@@ -16,7 +16,7 @@ export default function Cliente() {
     <Layout role="client">
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Panel del Cliente</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Panel de Control</h1>
           <p className="text-muted-foreground">Bienvenido a tu panel de control</p>
         </div>
 
@@ -98,6 +98,16 @@ export default function Cliente() {
           icon={FileText}
         >
           <div className="space-y-3">
+            <div className="flex justify-end gap-2 pb-2">
+              <Button variant="outline" size="sm">
+                <FileText className="mr-2 h-4 w-4" />
+                Generar Reporte Individual
+              </Button>
+              <Button variant="outline" size="sm">
+                <Calendar className="mr-2 h-4 w-4" />
+                Reporte por Fecha
+              </Button>
+            </div>
             {mockOrders.map((order) => (
               <div
                 key={order.id}

@@ -26,13 +26,16 @@ import Ayuda from "./pages/Ayuda";
 import NotFound from "./pages/NotFound";
 import ClienteNuevaOrden from "./pages/cliente/NuevaOrden";
 import ClientePerfil from "./pages/cliente/Perfil";
+import ClienteCitas from "./pages/cliente/Citas";
+import ClienteConfirmacionServicio from "./pages/cliente/ConfirmacionServicio";
 import AgenteNuevaOrden from "./pages/agente/NuevaOrden";
 import AgenteHistorial from "./pages/agente/Historial";
 import AgenteCancelarOrden from "./pages/agente/CancelarOrden";
-import CoordinadorImpedimentos from "./pages/coordinador/Impedimentos";
+import AgenteDetallesOrden from "./pages/agente/DetallesOrden";
 import CoordinadorCitas from "./pages/coordinador/Citas";
 import TecnicoDocumentar from "./pages/tecnico/Documentar";
 import TecnicoReportarImpedimento from "./pages/tecnico/ReportarImpedimento";
+import TecnicoGestionarEjecucion from "./pages/tecnico/GestionarEjecucion";
 
 const queryClient = new QueryClient();
 
@@ -48,22 +51,25 @@ const App = () => (
           <Route path="/cliente/ordenes" element={<ClienteOrdenes />} />
           <Route path="/cliente/nueva-orden" element={<ClienteNuevaOrden />} />
           <Route path="/cliente/perfil" element={<ClientePerfil />} />
+          <Route path="/cliente/citas" element={<ClienteCitas />} />
+          <Route path="/cliente/confirmacion-servicio" element={<ClienteConfirmacionServicio />} />
           <Route path="/agente" element={<Agente />} />
           <Route path="/agente/buscar" element={<BuscarCliente />} />
           <Route path="/agente/ordenes" element={<AgenteOrdenes />} />
           <Route path="/agente/nueva-orden" element={<AgenteNuevaOrden />} />
           <Route path="/agente/historial" element={<AgenteHistorial />} />
           <Route path="/agente/cancelar-orden" element={<AgenteCancelarOrden />} />
+          <Route path="/agente/detalles-orden" element={<AgenteDetallesOrden />} />
           <Route path="/coordinador" element={<Coordinador />} />
           <Route path="/coordinador/asignar" element={<AsignarOrdenes />} />
           <Route path="/coordinador/tecnicos" element={<Tecnicos />} />
-          <Route path="/coordinador/impedimentos" element={<CoordinadorImpedimentos />} />
           <Route path="/coordinador/citas" element={<CoordinadorCitas />} />
           <Route path="/tecnico" element={<Tecnico />} />
           <Route path="/tecnico/ordenes" element={<TecnicoOrdenes />} />
           <Route path="/tecnico/especialidades" element={<Especialidades />} />
           <Route path="/tecnico/documentar" element={<TecnicoDocumentar />} />
           <Route path="/tecnico/reportar-impedimento" element={<TecnicoReportarImpedimento />} />
+          <Route path="/tecnico/gestionar-ejecucion" element={<TecnicoGestionarEjecucion />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/usuarios" element={<Usuarios />} />
           <Route path="/admin/roles" element={<Roles />} />

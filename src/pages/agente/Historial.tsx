@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Search, FileText, Calendar } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const historyOrders = [
   { id: "OS-001", client: "Juan Pérez", service: "Reparación", status: "Completado", date: "2024-01-15" },
@@ -78,8 +79,8 @@ export default function Historial() {
                     >
                       {order.status}
                     </Badge>
-                    <Button variant="ghost" size="sm">
-                      Ver Detalles
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link to="/agente/detalles-orden">Ver Detalles</Link>
                     </Button>
                   </div>
                 </div>
