@@ -19,7 +19,6 @@ const menuItems = {
     { icon: FileText, label: "Órdenes de Servicio", path: "/cliente/ordenes" },
     { icon: Calendar, label: "Citas", path: "/cliente/citas" },
     { icon: Users, label: "Perfil", path: "/cliente/perfil" },
-    { icon: Settings, label: "Configuración", path: "/cliente/configuracion" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   agent: [
