@@ -17,11 +17,9 @@ const menuItems = {
   client: [
     { icon: Home, label: "Panel de Control", path: "/cliente" },
     { icon: FileText, label: "Órdenes de Servicio", path: "/cliente/ordenes" },
-    { icon: Users, label: "Citas", path: "/cliente/citas" },
-    { icon: Settings, label: "Perfil y Configuración", path: "/cliente/perfil", subItems: [
-      { icon: Settings, label: "Perfil", path: "/cliente/perfil" },
-      { icon: Settings, label: "Configuración", path: "/cliente/configuracion" },
-    ]},
+    { icon: Calendar, label: "Citas", path: "/cliente/citas" },
+    { icon: Users, label: "Perfil", path: "/cliente/perfil" },
+    { icon: Settings, label: "Configuración", path: "/cliente/configuracion" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   agent: [
