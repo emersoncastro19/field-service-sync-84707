@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { 
   Home, Users, Wrench, MapPin, Settings, FileText, HelpCircle, 
   Menu, X, LogOut, BarChart3, Bell, Calendar,
-  Plus, History, Play, Camera, AlertCircle
+  Plus, History, Play, Camera, AlertCircle, ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,10 @@ const menuItems = {
     { icon: Home, label: "Panel de Control", path: "/cliente" },
     { icon: FileText, label: "Órdenes de Servicio", path: "/cliente/ordenes" },
     { icon: Users, label: "Citas", path: "/cliente/citas" },
-    { icon: Settings, label: "Perfil y Configuración", path: "/cliente/perfil" },
+    { icon: Settings, label: "Perfil y Configuración", path: "/cliente/perfil", subItems: [
+      { icon: Settings, label: "Perfil", path: "/cliente/perfil" },
+      { icon: Settings, label: "Configuración", path: "/cliente/configuracion" },
+    ]},
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   agent: [
@@ -58,8 +61,17 @@ const menuItems = {
 
 export default function Layout({ children, role = "client" }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const location = useLocation();
   const items = menuItems[role];
+
+  const toggleExpanded = (path: string) => {
+    setExpandedItems(prev =>
+      prev.includes(path)
+        ? prev.filter(p => p !== path)
+        : [...prev, path]
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -113,22 +125,72 @@ export default function Layout({ children, role = "client" }: LayoutProps) {
             {items.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
+              const hasSubItems = item.subItems && item.subItems.length > 0;
+              const isExpanded = expandedItems.includes(item.path);
+              const isSubItemActive = hasSubItems && item.subItems?.some(sub => location.pathname === sub.path);
               
               return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                <div key={item.path}>
+                  {hasSubItems ? (
+                    <>
+                      <button
+                        onClick={() => toggleExpanded(item.path)}
+                        className={cn(
+                          "w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                          isSubItemActive
+                            ? "bg-muted text-foreground"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        )}
+                      >
+                        <Icon className="h-5 w-5" />
+                        <span className="flex-1 text-left">{item.label}</span>
+                        <ChevronDown className={cn(
+                          "h-4 w-4 transition-transform",
+                          isExpanded ? "rotate-180" : ""
+                        )} />
+                      </button>
+                      {isExpanded && (
+                        <div className="ml-4 mt-1 space-y-1">
+                          {item.subItems?.map((subItem) => {
+                            const SubIcon = subItem.icon;
+                            const isSubActive = location.pathname === subItem.path;
+                            
+                            return (
+                              <Link
+                                key={subItem.path}
+                                to={subItem.path}
+                                onClick={() => setSidebarOpen(false)}
+                                className={cn(
+                                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                                  isSubActive
+                                    ? "bg-primary text-primary-foreground shadow-sm"
+                                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                )}
+                              >
+                                <SubIcon className="h-4 w-4" />
+                                <span>{subItem.label}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <Link
+                      to={item.path}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                      <span className="flex-1">{item.label}</span>
+                    </Link>
                   )}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="flex-1">{item.label}</span>
-                </Link>
+                </div>
               );
             })}
           </nav>

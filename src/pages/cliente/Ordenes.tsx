@@ -1,8 +1,9 @@
 import Layout from "@/components/Layout";
-import DashboardCard from "@/components/DashboardCard";
-import { FileText, Clock, CheckCircle, XCircle, Calendar } from "lucide-react";
+import { FileText, Clock, CheckCircle, XCircle, Calendar, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 const mockOrders = [
   { id: "OS-001", service: "Reparación de PC", status: "completed", date: "2024-01-15", technician: "Juan Pérez" },
@@ -50,7 +51,7 @@ export default function ClienteOrdenes() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-4 text-sm mb-4">
                     <div>
                       <p className="text-muted-foreground">Fecha</p>
                       <p className="font-medium">{order.date}</p>
@@ -60,6 +61,12 @@ export default function ClienteOrdenes() {
                       <p className="font-medium">{order.technician}</p>
                     </div>
                   </div>
+                  <Button variant="outline" size="sm" className="w-full" asChild>
+                    <Link to={`/cliente/detalles-orden?id=${order.id}`} className="flex items-center gap-2">
+                      <Eye className="h-4 w-4" />
+                      Ver Detalles
+                    </Link>
+                  </Button>
                 </CardContent>
               </Card>
             );

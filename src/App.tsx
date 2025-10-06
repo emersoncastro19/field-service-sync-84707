@@ -26,8 +26,10 @@ import Ayuda from "./pages/Ayuda";
 import NotFound from "./pages/NotFound";
 import ClienteNuevaOrden from "./pages/cliente/NuevaOrden";
 import ClientePerfil from "./pages/cliente/Perfil";
+import ClienteConfiguracion from "./pages/cliente/Configuracion";
 import ClienteCitas from "./pages/cliente/Citas";
 import ClienteConfirmacionServicio from "./pages/cliente/ConfirmacionServicio";
+import ClienteDetallesOrden from "./pages/cliente/DetallesOrden";
 import AgenteNuevaOrden from "./pages/agente/NuevaOrden";
 import AgenteHistorial from "./pages/agente/Historial";
 import AgenteCancelarOrden from "./pages/agente/CancelarOrden";
@@ -49,8 +51,10 @@ const App = () => (
           <Route path="/" element={<Login />} />
           <Route path="/cliente" element={<Cliente />} />
           <Route path="/cliente/ordenes" element={<ClienteOrdenes />} />
+          <Route path="/cliente/detalles-orden" element={<ClienteDetallesOrden />} />
           <Route path="/cliente/nueva-orden" element={<ClienteNuevaOrden />} />
           <Route path="/cliente/perfil" element={<ClientePerfil />} />
+          <Route path="/cliente/configuracion" element={<ClienteConfiguracion />} />
           <Route path="/cliente/citas" element={<ClienteCitas />} />
           <Route path="/cliente/confirmacion-servicio" element={<ClienteConfirmacionServicio />} />
           <Route path="/agente" element={<Agente />} />
