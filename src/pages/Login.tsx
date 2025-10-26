@@ -5,14 +5,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import { Wrench } from "lucide-react";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [role, setRole] = useState("client");
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    toast({
+      title: "¡Acceso exitoso!",
+      description: "Bienvenido al sistema de gestión de servicios técnicos.",
+    });
+    
     // Route based on selected role
     const routes: { [key: string]: string } = {
       client: "/cliente",
@@ -21,7 +29,10 @@ export default function Login() {
       technician: "/tecnico",
       admin: "/admin",
     };
-    navigate(routes[role] || "/cliente");
+    
+    setTimeout(() => {
+      navigate(routes[role] || "/cliente");
+    }, 500);
   };
 
   return (
