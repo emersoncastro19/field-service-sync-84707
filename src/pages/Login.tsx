@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Wrench } from "lucide-react";
+import intercableLogo from "@/assets/intercable-logo.png";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -36,16 +36,24 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary via-primary to-secondary p-4">
-      <Card className="w-full max-w-md shadow-2xl">
-        <CardHeader className="space-y-1 text-center">
-          <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 shadow-lg">
-            <Wrench className="h-10 w-10 text-white" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 p-4">
+      <Card className="w-full max-w-md shadow-2xl border-0 backdrop-blur-sm bg-card/95">
+        <CardHeader className="space-y-4 text-center pb-8">
+          <div className="mx-auto w-48 h-auto mb-2">
+            <img 
+              src={intercableLogo} 
+              alt="Intercable Logo" 
+              className="w-full h-auto object-contain"
+            />
           </div>
-          <CardTitle className="text-2xl font-bold">Iniciar Sesión</CardTitle>
-          <CardDescription>
-            Sistema de Gestión de Servicios Técnicos
-          </CardDescription>
+          <div className="space-y-2">
+            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
+              Bienvenido
+            </CardTitle>
+            <CardDescription className="text-base">
+              Sistema de Gestión de Servicios Técnicos
+            </CardDescription>
+          </div>
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
