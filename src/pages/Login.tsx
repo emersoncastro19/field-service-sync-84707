@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import intercableLogo from "@/assets/intercable-logo.png";
+import intercableLogo from "@/assets/intercable-logo-custom.png";
 
 export default function Login() {
   const navigate = useNavigate();
