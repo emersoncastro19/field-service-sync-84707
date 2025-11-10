@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Fondo con gradiente redondeado -->
+  <rect width="100" height="100" rx="20" fill="url(#grad)"/>
+  <!-- Icono de llave inglesa -->
+  <g fill="none" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" transform="translate(50, 50)">
+    <!-- Cabeza circular de la llave -->
+    <circle cx="0" cy="-15" r="10"/>
+    <!-- Vara vertical principal -->
+    <line x1="0" y1="-5" x2="0" y2="15"/>
+    <!-- Mango horizontal -->
+    <line x1="-18" y1="15" x2="18" y2="15"/>
+    <!-- Parte superior horizontal -->
+    <line x1="-20" y1="-20" x2="20" y2="-20"/>
+    <!-- Conectores -->
+    <line x1="-20" y1="-20" x2="-10" y2="-5"/>
+    <line x1="20" y1="-20" x2="10" y2="-5"/>
+  </g>
+</svg>

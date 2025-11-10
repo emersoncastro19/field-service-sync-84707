@@ -11,6 +11,7 @@ export interface Usuario {
   ultimo_acceso?: string;
   fecha_creacion?: string;
   fecha_actualizacion?: string;
+  requiere_cambio_contraseña?: boolean;
 }
 
 export interface LoginData {
@@ -25,6 +26,13 @@ export interface RegistroData {
   telefono?: string;
   nombre_completo: string;
   tipo_usuario: 'Cliente' | 'Agente' | 'Coordinador' | 'Tecnico' | 'Admin';
+  // Campos específicos para Cliente
+  tipo_identificacion?: 'Cedula' | 'Pasaporte' | 'RIF';
+  identificacion?: string;
+  direccion_principal?: string;
+  direccion_servicio?: string;
+  referencias_ubicacion?: string;
+  tipo_cliente?: 'Residencial' | 'Comercial' | 'Empresarial';
 }
 
 export interface AuthContextType {

@@ -1,24 +1,98 @@
+import { useState, useEffect } from "react";
 import Layout from "@/frontend/components/Layout";
 import DashboardCard from "@/frontend/components/DashboardCard";
 import { Button } from "@/frontend/components/ui/button";
 import { Users, Bell, Shield, Settings } from "lucide-react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/backend/config/supabaseClient";
+import { useAuth } from "@/frontend/context/AuthContext";
+import { useToast } from "@/frontend/context/ToastContext";
+import { Card } from "@/frontend/components/ui/card";
+import SupabaseUsageMonitor from "@/frontend/components/SupabaseUsageMonitor";
 
 export default function Admin() {
+  const { usuario } = useAuth();
+  const { success } = useToast();
+  const [stats, setStats] = useState({
+    totalUsuarios: 0,
+    rolesActivos: 5,
+    notificacionesEnviadas: 0,
+    sistemaActivo: "100%"
+  });
+  const [cargando, setCargando] = useState(true);
+
+  // Mostrar mensaje de bienvenida solo cuando es un nuevo ingreso (después de login)
+  useEffect(() => {
+    if (usuario) {
+      // Verificar si es un nuevo ingreso
+      const nuevoIngreso = sessionStorage.getItem('nuevo_ingreso_Admin');
+      
+      if (nuevoIngreso === 'true') {
+        // Mostrar mensaje solo en nuevo ingreso
+        const timeoutId = setTimeout(() => {
+          success(
+            `Bienvenido/a, ${usuario.nombre_completo}`,
+            'Has ingresado al panel de administración. Gestiona usuarios, roles y configuraciones del sistema.'
+          );
+          // Eliminar la marca para que no vuelva a aparecer hasta el próximo login
+          sessionStorage.removeItem('nuevo_ingreso_Admin');
+        }, 1000);
+        
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [usuario, success]);
+
+  useEffect(() => {
+    cargarEstadisticas();
+  }, []);
+
+  const cargarEstadisticas = async () => {
+    try {
+      // Contar total de usuarios
+      const { count: totalUsuarios } = await supabase
+        .from('usuarios')
+        .select('*', { count: 'exact', head: true });
+
+      // Contar notificaciones enviadas
+      const { count: notificaciones } = await supabase
+        .from('notificaciones')
+        .select('*', { count: 'exact', head: true });
+
+      setStats({
+        totalUsuarios: totalUsuarios || 0,
+        rolesActivos: 5, // Siempre 5 roles disponibles
+        notificacionesEnviadas: notificaciones || 0,
+        sistemaActivo: "100%"
+      });
+    } catch (err) {
+      console.error('Error cargando estadísticas:', err);
+    } finally {
+      setCargando(false);
+    }
+  };
+
   return (
     <Layout role="admin">
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Administración del Sistema</h1>
-          <p className="text-muted-foreground">Gestiona usuarios, roles y configuraciones</p>
+          <p className="text-muted-foreground">
+            Bienvenido, {usuario?.nombre_completo} - Panel de control administrativo
+          </p>
         </div>
 
+        {/* Cards de Estadísticas */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="bg-gradient-to-br from-primary to-primary/80 text-white">
             <div className="p-6">
               <Users className="h-8 w-8 mb-2" />
               <p className="text-sm font-medium">Total Usuarios</p>
-              <p className="text-3xl font-bold">156</p>
+              {cargando ? (
+                <div className="h-9 w-16 bg-white/20 rounded animate-pulse"></div>
+              ) : (
+                <p className="text-3xl font-bold">{stats.totalUsuarios}</p>
+              )}
             </div>
           </Card>
           
@@ -26,7 +100,7 @@ export default function Admin() {
             <div className="p-6">
               <Shield className="h-8 w-8 mb-2" />
               <p className="text-sm font-medium">Roles Activos</p>
-              <p className="text-3xl font-bold">5</p>
+              <p className="text-3xl font-bold">{stats.rolesActivos}</p>
             </div>
           </Card>
           
@@ -34,7 +108,11 @@ export default function Admin() {
             <div className="p-6">
               <Bell className="h-8 w-8 mb-2" />
               <p className="text-sm font-medium">Notificaciones Enviadas</p>
-              <p className="text-3xl font-bold">1,234</p>
+              {cargando ? (
+                <div className="h-9 w-16 bg-white/20 rounded animate-pulse"></div>
+              ) : (
+                <p className="text-3xl font-bold">{stats.notificacionesEnviadas}</p>
+              )}
             </div>
           </Card>
           
@@ -42,11 +120,12 @@ export default function Admin() {
             <div className="p-6">
               <Settings className="h-8 w-8 mb-2" />
               <p className="text-sm font-medium">Sistema Activo</p>
-              <p className="text-3xl font-bold">100%</p>
+              <p className="text-3xl font-bold">{stats.sistemaActivo}</p>
             </div>
           </Card>
         </div>
 
+        {/* Acciones Principales */}
         <div className="grid gap-6 lg:grid-cols-2">
           <DashboardCard
             title="Gestión de Usuarios y Roles"
@@ -91,6 +170,10 @@ export default function Admin() {
           </DashboardCard>
         </div>
 
+        {/* Monitor de Uso de Supabase */}
+        <SupabaseUsageMonitor />
+
+        {/* Auditoría */}
         <DashboardCard
           title="Auditoría del Sistema"
           description="Logs y reportes de actividad"

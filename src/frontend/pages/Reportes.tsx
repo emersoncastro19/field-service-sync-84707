@@ -1,9 +1,43 @@
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "@/frontend/components/Layout";
 import DashboardCard from "@/frontend/components/DashboardCard";
 import { Button } from "@/frontend/components/ui/button";
 import { BarChart3, TrendingUp, Users, AlertTriangle, FileText } from "lucide-react";
+import { useAuth } from "@/frontend/context/AuthContext";
 
 export default function Reportes() {
+  const { usuario } = useAuth();
+  const navigate = useNavigate();
+
+  // Obtener el rol del usuario autenticado
+  const getRole = (): "client" | "agent" | "coordinator" | "technician" | "admin" => {
+    if (!usuario) {
+      return 'client'; // Valor temporal mientras se carga
+    }
+    
+    // Mapear tipo_usuario de la BD al formato del Layout
+    const roleMap: Record<string, "client" | "agent" | "coordinator" | "technician" | "admin"> = {
+      'Cliente': 'client',
+      'Agente': 'agent',
+      'Coordinador': 'coordinator',
+      'Tecnico': 'technician',
+      'Admin': 'admin'
+    };
+    
+    return roleMap[usuario.tipo_usuario] || 'client';
+  };
+
+  // Redirigir al login si no hay usuario
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!usuario) {
+        navigate("/login");
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [usuario, navigate]);
   const reports = [
     {
       title: "Reporte de Órdenes por Estado",
@@ -32,7 +66,7 @@ export default function Reportes() {
   ];
 
   return (
-    <Layout role="coordinator">
+    <Layout role={getRole()}>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reportes</h1>

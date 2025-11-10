@@ -6,7 +6,7 @@ import { Label } from "@/frontend/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/frontend/components/ui/card";
 import { KeyRound, ArrowLeft } from "lucide-react";
 import { solicitarRecuperacionContraseña, cambiarContraseñaConToken } from "@/backend/services/authService";
-import { useToast } from "@/frontend/hooks/useToast";
+import { useToast } from "@/frontend/context/ToastContext";
 
 export default function RecuperarContraseña() {
   const navigate = useNavigate();

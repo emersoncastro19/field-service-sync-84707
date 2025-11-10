@@ -55,7 +55,7 @@ const Toast: React.FC<ToastProps> = ({ toast, onRemove }) => {
 
   return (
     <div
-      className={`fixed top-4 right-4 z-50 max-w-sm w-full bg-white border rounded-lg shadow-lg p-4 ${getBackgroundColor()} animate-in slide-in-from-right-full duration-300`}
+      className={`max-w-sm w-full bg-white border rounded-lg shadow-lg p-4 ${getBackgroundColor()} animate-in slide-in-from-right-full duration-300`}
     >
       <div className="flex items-start space-x-3">
         {getIcon()}

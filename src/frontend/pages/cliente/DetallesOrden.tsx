@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/backend/config/supabaseClient";
 import { useAuth } from "@/frontend/context/AuthContext";
-import { useToast } from "@/frontend/hooks/useToast";
+import { useToast } from "@/frontend/context/ToastContext";
 
 interface OrdenDetalle {
   id_orden: number;
@@ -157,7 +157,10 @@ export default function ClienteDetallesOrden() {
   };
 
   const confirmarServicio = async (idEjecucion: number) => {
+    if (!orden) return;
+
     try {
+      // 1. Actualizar ejecución de servicio
       const { error: updateError } = await supabase
         .from('ejecuciones_servicio')
         .update({ confirmacion_cliente: 'Confirmada' })
@@ -165,15 +168,73 @@ export default function ClienteDetallesOrden() {
 
       if (updateError) throw updateError;
 
-      success('Servicio confirmado', 'Has confirmado la ejecución del servicio');
+      // 2. Actualizar estado de la orden a "Completada" (definitivamente)
+      const { error: ordenError } = await supabase
+        .from('ordenes_servicio')
+        .update({ estado: 'Completada' })
+        .eq('id_orden', orden.id_orden);
+
+      if (ordenError) throw ordenError;
+
+      // 3. Obtener IDs para notificaciones
+      const { data: ordenData } = await supabase
+        .from('ordenes_servicio')
+        .select(`
+          id_tecnico_asignado,
+          tecnicos!inner (
+            usuarios!inner (
+              id_usuario
+            )
+          )
+        `)
+        .eq('id_orden', orden.id_orden)
+        .single();
+
+      const idUsuarioTecnico = ordenData?.tecnicos?.usuarios?.id_usuario;
+
+      // 4. Crear notificaciones
+      if (idUsuarioTecnico) {
+        await supabase
+          .from('notificaciones')
+          .insert([
+            {
+              id_orden: orden.id_orden,
+              id_destinatario: idUsuarioTecnico,
+              tipo_notificacion: 'Confirmación de Servicio',
+              canal: 'Sistema_Interno',
+              mensaje: `El cliente ha confirmado el servicio de la orden ${orden.numero_orden}`,
+              fecha_enviada: new Date().toISOString(),
+              leida: false
+            }
+          ]);
+      }
+
+      // 5. Log de auditoría
+      await supabase
+        .from('logs_auditoria')
+        .insert([
+          {
+            id_usuario: usuario?.id_usuario,
+            id_orden: orden.id_orden,
+            accion: 'CONFIRMAR_SERVICIO',
+            descripcion: `Cliente confirmó el servicio de la orden ${orden.numero_orden}`,
+            timestamp: new Date().toISOString()
+          }
+        ]);
+
+      success('Servicio confirmado', 'Has confirmado la ejecución del servicio. La orden ha sido cerrada exitosamente.');
       cargarDetallesOrden();
     } catch (err: any) {
+      console.error('Error confirmando servicio:', err);
       error('Error', 'No se pudo confirmar el servicio');
     }
   };
 
   const rechazarServicio = async (idEjecucion: number) => {
+    if (!orden) return;
+
     try {
+      // 1. Actualizar ejecución de servicio
       const { error: updateError } = await supabase
         .from('ejecuciones_servicio')
         .update({ confirmacion_cliente: 'Rechazada' })
@@ -181,9 +242,88 @@ export default function ClienteDetallesOrden() {
 
       if (updateError) throw updateError;
 
-      success('Servicio rechazado', 'Se ha notificado que rechazas el servicio');
+      // 2. Actualizar estado de la orden a "Rechazada" o mantener "En Proceso" para revisión
+      const { error: ordenError } = await supabase
+        .from('ordenes_servicio')
+        .update({ estado: 'En Proceso' }) // Mantener en proceso para que el coordinador revise
+        .eq('id_orden', orden.id_orden);
+
+      if (ordenError) throw ordenError;
+
+      // 3. Obtener ID del coordinador para notificación
+      // Buscar un coordinador (podría mejorarse para obtener el coordinador específico)
+      const { data: coordinadores } = await supabase
+        .from('coordinadores_campo')
+        .select('id_usuario')
+        .limit(1)
+        .single();
+
+      // 4. Crear notificaciones
+      const notificaciones = [];
+      
+      if (coordinadores?.id_usuario) {
+        notificaciones.push({
+          id_orden: orden.id_orden,
+          id_destinatario: coordinadores.id_usuario,
+          tipo_notificacion: 'Servicio Rechazado',
+          canal: 'Sistema_Interno',
+          mensaje: `El cliente ha rechazado el servicio de la orden ${orden.numero_orden}. Se requiere revisión.`,
+          fecha_enviada: new Date().toISOString(),
+          leida: false
+        });
+      }
+
+      // Notificar también al técnico
+      const { data: ordenData } = await supabase
+        .from('ordenes_servicio')
+        .select(`
+          id_tecnico_asignado,
+          tecnicos!inner (
+            usuarios!inner (
+              id_usuario
+            )
+          )
+        `)
+        .eq('id_orden', orden.id_orden)
+        .single();
+
+      const idUsuarioTecnico = ordenData?.tecnicos?.usuarios?.id_usuario;
+      
+      if (idUsuarioTecnico) {
+        notificaciones.push({
+          id_orden: orden.id_orden,
+          id_destinatario: idUsuarioTecnico,
+          tipo_notificacion: 'Servicio Rechazado',
+          canal: 'Sistema_Interno',
+          mensaje: `El cliente ha rechazado el servicio de la orden ${orden.numero_orden}`,
+          fecha_enviada: new Date().toISOString(),
+          leida: false
+        });
+      }
+
+      if (notificaciones.length > 0) {
+        await supabase
+          .from('notificaciones')
+          .insert(notificaciones);
+      }
+
+      // 5. Log de auditoría
+      await supabase
+        .from('logs_auditoria')
+        .insert([
+          {
+            id_usuario: usuario?.id_usuario,
+            id_orden: orden.id_orden,
+            accion: 'RECHAZAR_SERVICIO',
+            descripcion: `Cliente rechazó el servicio de la orden ${orden.numero_orden}`,
+            timestamp: new Date().toISOString()
+          }
+        ]);
+
+      success('Servicio rechazado', 'Se ha notificado que rechazas el servicio. El coordinador revisará el caso.');
       cargarDetallesOrden();
     } catch (err: any) {
+      console.error('Error rechazando servicio:', err);
       error('Error', 'No se pudo rechazar el servicio');
     }
   };
@@ -287,10 +427,10 @@ export default function ClienteDetallesOrden() {
             {/* Información de la Orden */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                    <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5 text-primary" />
                   Información del Servicio
-                </CardTitle>
+                    </CardTitle>
                 <CardDescription>Detalles de la solicitud</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -300,13 +440,13 @@ export default function ClienteDetallesOrden() {
                     <div className="flex items-center gap-2 mt-1">
                       <Package className="h-4 w-4 text-primary" />
                       <p className="font-medium">{orden.tipo_servicio}</p>
-                    </div>
+                  </div>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Prioridad</p>
                     <div className="mt-1">
                       {getPrioridadBadge(orden.prioridad)}
-                    </div>
+                  </div>
                   </div>
                 </div>
 
@@ -421,9 +561,9 @@ export default function ClienteDetallesOrden() {
                         )}
                       </div>
                     ))}
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
             )}
 
             {/* Ejecuciones */}
@@ -542,16 +682,16 @@ export default function ClienteDetallesOrden() {
           <div className="space-y-6">
             {/* Técnico Asignado */}
             {orden.tecnico ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
                     <User className="h-5 w-5 text-primary" />
-                    Técnico Asignado
-                  </CardTitle>
-                </CardHeader>
+                  Técnico Asignado
+                </CardTitle>
+              </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Nombre</p>
+                <div>
+                  <p className="text-sm text-muted-foreground">Nombre</p>
                     <p className="font-medium">{orden.tecnico.nombre_completo}</p>
                   </div>
                   
@@ -571,16 +711,16 @@ export default function ClienteDetallesOrden() {
                       Email
                     </p>
                     <p className="font-medium text-sm">{orden.tecnico.email}</p>
-                  </div>
+                </div>
                   
                   <Separator />
                   
-                  <div>
+                <div>
                     <p className="text-sm text-muted-foreground">Zona de Cobertura</p>
                     <p className="font-medium">{orden.tecnico.zona_cobertura}</p>
-                  </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
             ) : (
               <Alert>
                 <AlertCircle className="h-4 w-4" />
@@ -592,18 +732,18 @@ export default function ClienteDetallesOrden() {
 
             {/* Agente Creador */}
             {orden.agente_creador && (
-              <Card>
-                <CardHeader>
+            <Card>
+              <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <User className="h-4 w-4" />
                     Creada por
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
                   <p className="font-medium">{orden.agente_creador.nombre_completo}</p>
                   <p className="text-xs text-muted-foreground mt-1">Agente de Servicio</p>
-                </CardContent>
-              </Card>
+              </CardContent>
+            </Card>
             )}
 
             {/* Botón de Volver */}

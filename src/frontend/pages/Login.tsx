@@ -7,9 +7,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Wrench } from "lucide-react";
 import { loginUsuario } from "@/backend/services/authService";
 import { useAuth } from "@/frontend/context/AuthContext";
-import { useToast } from "@/frontend/hooks/useToast";
+import { useToast } from "@/frontend/context/ToastContext";
 import { validateLogin } from "@/shared/validation";
 import { LoginData } from "@/shared/types";
+import CambioContraseñaObligatorio from "@/frontend/components/CambioContraseñaObligatorio";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export default function Login() {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [mensaje, setMensaje] = useState<{ tipo: 'success' | 'error' | 'warning' | 'info', texto: string } | null>(null);
   const [cargando, setCargando] = useState(false);
+  const [mostrarCambioContraseña, setMostrarCambioContraseña] = useState(false);
 
   const handleInputChange = (field: keyof LoginData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -57,49 +59,56 @@ export default function Login() {
       const usuario = await loginUsuario(formData.email, formData.contraseña);
       setUsuario(usuario);
       
-      // Mensaje de éxito específico
-      setMensaje({
-        tipo: 'success',
-        texto: `¡Bienvenido ${usuario.nombre_completo}! Acceso exitoso.`
-      });
+      // Verificar si requiere cambio de contraseña (solo para usuarios no-Cliente)
+      // Los clientes NUNCA deben requerir cambio de contraseña al registrarse
+      if (usuario.requiere_cambio_contraseña && usuario.tipo_usuario !== 'Cliente') {
+        setMostrarCambioContraseña(true);
+        return;
+      }
       
-      // Redirigir según el tipo de usuario después de mostrar el mensaje
-      setTimeout(() => {
-        const routes: { [key: string]: string } = {
-          "Cliente": "/cliente",
-          "Agente": "/agente", 
-          "Coordinador": "/coordinador",
-          "Tecnico": "/tecnico",
-          "Admin": "/admin"
-        };
-        
-        const ruta = routes[usuario.tipo_usuario] || "/";
-        navigate(ruta);
-      }, 1500);
+      // Marcar que es un nuevo ingreso (para mostrar mensaje de bienvenida)
+      sessionStorage.setItem(`nuevo_ingreso_${usuario.tipo_usuario}`, 'true');
+      
+      // Redirigir según el tipo de usuario (el mensaje de bienvenida se mostrará dentro del sistema)
+      const routes: { [key: string]: string } = {
+        "Cliente": "/cliente",
+        "Agente": "/agente", 
+        "Coordinador": "/coordinador",
+        "Tecnico": "/tecnico",
+        "Admin": "/admin"
+      };
+      
+      const ruta = routes[usuario.tipo_usuario] || "/";
+      navigate(ruta);
       
     } catch (err: any) {
       console.error(err);
       
       // Mensajes específicos según el tipo de error
-      if (err.message.includes('bloqueado')) {
+      if (err.message === 'USUARIO_INACTIVO') {
         setMensaje({
           tipo: 'error',
-          texto: '⚠️ Usuario bloqueado por múltiples intentos fallidos. Contacta al administrador.'
+          texto: 'Tu cuenta se encuentra fuera de servicio. Por favor, contacta al administrador del sistema para reactivar tu cuenta.'
+        });
+      } else if (err.message.includes('bloqueado')) {
+        setMensaje({
+          tipo: 'error',
+          texto: 'Usuario bloqueado por múltiples intentos fallidos. Contacta al administrador.'
         });
       } else if (err.message.includes('Contraseña incorrecta')) {
         setMensaje({
           tipo: 'error',
-          texto: `❌ ${err.message}`
+          texto: err.message
         });
       } else if (err.message.includes('Usuario no encontrado')) {
         setMensaje({
           tipo: 'error',
-          texto: '❌ Usuario no encontrado. Verifica tu email.'
+          texto: 'Usuario no encontrado. Verifica tu email o nombre de usuario.'
         });
       } else {
         setMensaje({
           tipo: 'error',
-          texto: `❌ Error de autenticación: ${err.message}`
+          texto: `Error de autenticación: ${err.message}`
         });
       }
     } finally {
@@ -122,11 +131,11 @@ export default function Login() {
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Correo Electrónico</Label>
+              <Label htmlFor="email">Usuario o Correo Electrónico</Label>
               <Input
                 id="email"
-                type="email"
-                placeholder="usuario@ejemplo.com"
+                type="text"
+                placeholder="admin o usuario@ejemplo.com"
                 value={formData.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
                 className={validationErrors.email ? 'border-red-500' : ''}
@@ -135,6 +144,9 @@ export default function Login() {
               {validationErrors.email && (
                 <p className="text-sm text-red-500">{validationErrors.email}</p>
               )}
+              <p className="text-xs text-muted-foreground">
+                Puedes usar tu nombre de usuario o tu correo electrónico
+              </p>
             </div>
             
             <div className="space-y-2">
@@ -185,6 +197,44 @@ export default function Login() {
           </CardFooter>
         </form>
       </Card>
+
+      {/* Dialog de cambio obligatorio de contraseña */}
+      <CambioContraseñaObligatorio
+        open={mostrarCambioContraseña}
+        onSuccess={() => {
+          console.log('✅ onSuccess callback ejecutado en Login');
+          setMostrarCambioContraseña(false);
+          
+          // Recargar usuario y redirigir
+          const usuarioActualizado = JSON.parse(localStorage.getItem('usuarioActual') || '{}');
+          console.log('🔄 Usuario actualizado desde localStorage:', usuarioActualizado);
+          
+          if (usuarioActualizado && usuarioActualizado.tipo_usuario) {
+            setUsuario(usuarioActualizado);
+            
+            // Marcar que es un nuevo ingreso (para mostrar mensaje de bienvenida)
+            sessionStorage.setItem(`nuevo_ingreso_${usuarioActualizado.tipo_usuario}`, 'true');
+            
+            const routes: { [key: string]: string } = {
+              "Cliente": "/cliente",
+              "Agente": "/agente", 
+              "Coordinador": "/coordinador",
+              "Tecnico": "/tecnico",
+              "Admin": "/admin"
+            };
+            
+            const ruta = routes[usuarioActualizado.tipo_usuario] || "/";
+            console.log('🚀 Redirigiendo a:', ruta);
+            
+            setTimeout(() => {
+              navigate(ruta);
+            }, 500);
+          } else {
+            console.error('❌ No se pudo obtener usuario actualizado');
+            navigate("/");
+          }
+        }}
+      />
     </div>
   );
 }

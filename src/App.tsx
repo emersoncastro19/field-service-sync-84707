@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/frontend/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/frontend/context/AuthContext";
+import { ToastProvider } from "@/frontend/context/ToastContext";
 import { ToastContainer } from "@/frontend/components/ToastContainer";
 import Login from "@/frontend/pages/Login";
 import Registro from "@/frontend/pages/Registro";
@@ -37,21 +38,25 @@ import AgenteNuevaOrden from "@/frontend/pages/agente/NuevaOrden";
 import AgenteHistorial from "@/frontend/pages/agente/Historial";
 import AgenteCancelarOrden from "@/frontend/pages/agente/CancelarOrden";
 import AgenteDetallesOrden from "@/frontend/pages/agente/DetallesOrden";
+import AgenteValidarOrdenes from "@/frontend/pages/agente/ValidarOrdenes";
 import CoordinadorCitas from "@/frontend/pages/coordinador/Citas";
+import CoordinadorHistorial from "@/frontend/pages/coordinador/HistorialAsignaciones";
 import TecnicoDocumentar from "@/frontend/pages/tecnico/Documentar";
 import TecnicoReportarImpedimento from "@/frontend/pages/tecnico/ReportarImpedimento";
 import TecnicoGestionarEjecucion from "@/frontend/pages/tecnico/GestionarEjecucion";
+import TecnicoCitas from "@/frontend/pages/tecnico/Citas";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <ToastContainer />
-      <AuthProvider>
-        <BrowserRouter>
+      <ToastProvider>
+        <AuthProvider>
+          <ToastContainer />
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/login" element={<Login />} />
@@ -71,16 +76,19 @@ const App = () => (
             <Route path="/agente/historial" element={<AgenteHistorial />} />
             <Route path="/agente/cancelar-orden" element={<AgenteCancelarOrden />} />
             <Route path="/agente/detalles-orden" element={<AgenteDetallesOrden />} />
+            <Route path="/agente/validar-ordenes" element={<AgenteValidarOrdenes />} />
             <Route path="/coordinador" element={<Coordinador />} />
             <Route path="/coordinador/asignar" element={<AsignarOrdenes />} />
             <Route path="/coordinador/tecnicos" element={<Tecnicos />} />
             <Route path="/coordinador/citas" element={<CoordinadorCitas />} />
+            <Route path="/coordinador/historial" element={<CoordinadorHistorial />} />
             <Route path="/tecnico" element={<Tecnico />} />
             <Route path="/tecnico/ordenes" element={<TecnicoOrdenes />} />
             <Route path="/tecnico/especialidades" element={<Especialidades />} />
             <Route path="/tecnico/documentar" element={<TecnicoDocumentar />} />
             <Route path="/tecnico/reportar-impedimento" element={<TecnicoReportarImpedimento />} />
             <Route path="/tecnico/gestionar-ejecucion" element={<TecnicoGestionarEjecucion />} />
+            <Route path="/tecnico/citas" element={<TecnicoCitas />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/usuarios" element={<Usuarios />} />
             <Route path="/admin/roles" element={<Roles />} />
@@ -92,8 +100,9 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </BrowserRouter>
-      </AuthProvider>
+          </BrowserRouter>
+        </AuthProvider>
+      </ToastProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

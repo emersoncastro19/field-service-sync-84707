@@ -1,12 +1,14 @@
 import { ReactNode, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   Home, Users, Wrench, MapPin, Settings, FileText, HelpCircle, 
   Menu, X, LogOut, BarChart3, Bell, Calendar,
-  Plus, History, Play, Camera, AlertCircle, ChevronDown
+  Plus, History, Play, Camera, AlertCircle, ChevronDown, ShieldCheck
 } from "lucide-react";
 import { Button } from "@/frontend/components/ui/button";
 import { cn } from "@/frontend/lib/utils";
+import { useAuth } from "@/frontend/context/AuthContext";
+import NotificationBell from "@/frontend/components/NotificationBell";
 
 interface LayoutProps {
   children: ReactNode;
@@ -25,6 +27,7 @@ const menuItems = {
     { icon: Home, label: "Órdenes Recientes", path: "/agente" },
     { icon: Users, label: "Buscar Clientes", path: "/agente/buscar" },
     { icon: Plus, label: "Crear Nueva Orden", path: "/agente/nueva-orden" },
+    { icon: ShieldCheck, label: "Validar Órdenes", path: "/agente/validar-ordenes" },
     { icon: History, label: "Consultar Historial", path: "/agente/historial" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
@@ -32,12 +35,14 @@ const menuItems = {
     { icon: Home, label: "Panel del Coordinador", path: "/coordinador" },
     { icon: Calendar, label: "Gestionar Citas de Servicio", path: "/coordinador/citas" },
     { icon: MapPin, label: "Asignar o Reasignar Órdenes", path: "/coordinador/asignar" },
+    { icon: History, label: "Historial de Asignaciones", path: "/coordinador/historial" },
     { icon: BarChart3, label: "Reportes", path: "/reportes" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   technician: [
     { icon: Home, label: "Panel del Técnico", path: "/tecnico" },
     { icon: FileText, label: "Órdenes Asignadas", path: "/tecnico/ordenes" },
+    { icon: Calendar, label: "Mis Citas", path: "/tecnico/citas" },
     { icon: Wrench, label: "Gestionar Ejecución de Servicio", path: "/tecnico/gestionar-ejecucion", subItems: [
       { icon: Play, label: "Iniciar/Finalizar Trabajo", path: "/tecnico/gestionar-ejecucion" },
       { icon: Camera, label: "Documentar Servicio", path: "/tecnico/documentar" },
@@ -60,6 +65,8 @@ export default function Layout({ children, role = "client" }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout, usuario } = useAuth();
   const items = menuItems[role];
 
   const toggleExpanded = (path: string) => {
@@ -68,6 +75,11 @@ export default function Layout({ children, role = "client" }: LayoutProps) {
         ? prev.filter(p => p !== path)
         : [...prev, path]
     );
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/");
   };
 
   return (
@@ -95,15 +107,10 @@ export default function Layout({ children, role = "client" }: LayoutProps) {
           </div>
           
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-4 w-4" />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive"></span>
-            </Button>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/" className="flex items-center gap-2">
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Cerrar Sesión</span>
-              </Link>
+            {usuario && <NotificationBell />}
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="flex items-center gap-2">
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Cerrar Sesión</span>
             </Button>
           </div>
         </div>

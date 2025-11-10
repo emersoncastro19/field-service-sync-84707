@@ -1,13 +1,48 @@
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "@/frontend/components/Layout";
 import DashboardCard from "@/frontend/components/DashboardCard";
 import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
 import { Label } from "@/frontend/components/ui/label";
 import { Key, Trash2, Database, HardDrive } from "lucide-react";
+import { useAuth } from "@/frontend/context/AuthContext";
 
 export default function Herramientas() {
+  const { usuario } = useAuth();
+  const navigate = useNavigate();
+
+  // Obtener el rol del usuario autenticado
+  const getRole = (): "client" | "agent" | "coordinator" | "technician" | "admin" => {
+    if (!usuario) {
+      return 'admin'; // Valor temporal mientras se carga (por defecto admin para este módulo)
+    }
+    
+    // Mapear tipo_usuario de la BD al formato del Layout
+    const roleMap: Record<string, "client" | "agent" | "coordinator" | "technician" | "admin"> = {
+      'Cliente': 'client',
+      'Agente': 'agent',
+      'Coordinador': 'coordinator',
+      'Tecnico': 'technician',
+      'Admin': 'admin'
+    };
+    
+    return roleMap[usuario.tipo_usuario] || 'admin';
+  };
+
+  // Redirigir al login si no hay usuario
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!usuario) {
+        navigate("/login");
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [usuario, navigate]);
+
   return (
-    <Layout role="admin">
+    <Layout role={getRole()}>
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Herramientas del Sistema</h1>

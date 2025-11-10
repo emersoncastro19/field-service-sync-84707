@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import Layout from "@/frontend/components/Layout";
 import DashboardCard from "@/frontend/components/DashboardCard";
 import { Button } from "@/frontend/components/ui/button";
@@ -5,8 +6,34 @@ import { Input } from "@/frontend/components/ui/input";
 import { Search, Plus, FileText, History, XCircle } from "lucide-react";
 import { Badge } from "@/frontend/components/ui/badge";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/frontend/context/AuthContext";
+import { useToast } from "@/frontend/context/ToastContext";
 
 export default function Agente() {
+  const { usuario } = useAuth();
+  const { success } = useToast();
+
+  // Mostrar mensaje de bienvenida solo cuando es un nuevo ingreso (después de login)
+  useEffect(() => {
+    if (usuario) {
+      // Verificar si es un nuevo ingreso
+      const nuevoIngreso = sessionStorage.getItem('nuevo_ingreso_Agente');
+      
+      if (nuevoIngreso === 'true') {
+        // Mostrar mensaje solo en nuevo ingreso
+        const timeoutId = setTimeout(() => {
+          success(
+            `Bienvenido/a, ${usuario.nombre_completo}`,
+            'Has ingresado al panel de agente. Aquí puedes gestionar órdenes y asignar técnicos.'
+          );
+          // Eliminar la marca para que no vuelva a aparecer hasta el próximo login
+          sessionStorage.removeItem('nuevo_ingreso_Agente');
+        }, 1000);
+        
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [usuario, success]);
   const mockOrders = [
     { id: "OS-001", client: "Juan Pérez", service: "Reparación", status: "En progreso" },
     { id: "OS-002", client: "María García", service: "Instalación", status: "Completado" },

@@ -9,9 +9,19 @@ export const validateLogin = (data: LoginData): ValidationError[] => {
   const errors: ValidationError[] = [];
 
   if (!data.email) {
-    errors.push({ field: 'email', message: 'El email es requerido' });
-  } else if (!isValidEmail(data.email)) {
-    errors.push({ field: 'email', message: 'El formato del email no es válido' });
+    errors.push({ field: 'email', message: 'El usuario o email es requerido' });
+  } else {
+    // Si contiene @, debe ser un email válido. Si no, es username
+    if (data.email.includes('@')) {
+      if (!isValidEmail(data.email)) {
+        errors.push({ field: 'email', message: 'El formato del email no es válido' });
+      }
+    } else {
+      // Validar que sea un username válido
+      if (!isValidUsername(data.email)) {
+        errors.push({ field: 'email', message: 'El nombre de usuario no es válido' });
+      }
+    }
   }
 
   if (!data.contraseña) {
@@ -30,6 +40,11 @@ export const validateRegistro = (data: RegistroData): ValidationError[] => {
     errors.push({ 
       field: 'username', 
       message: `El nombre de usuario debe tener al menos ${USERNAME_MIN_LENGTH} caracteres` 
+    });
+  } else if (!isValidUsername(data.username)) {
+    errors.push({ 
+      field: 'username', 
+      message: 'El nombre de usuario solo puede contener letras, números y guiones bajos' 
     });
   }
 
@@ -54,6 +69,35 @@ export const validateRegistro = (data: RegistroData): ValidationError[] => {
 
   if (data.telefono && !isValidPhone(data.telefono)) {
     errors.push({ field: 'telefono', message: 'El formato del teléfono no es válido' });
+  }
+
+  // Validaciones específicas para Cliente
+  if (data.tipo_usuario === 'Cliente') {
+    if (!data.tipo_identificacion) {
+      errors.push({ field: 'tipo_identificacion', message: 'El tipo de identificación es requerido' });
+    }
+
+    if (!data.identificacion) {
+      errors.push({ field: 'identificacion', message: 'El número de identificación es requerido' });
+    } else if (data.identificacion.trim().length === 0) {
+      errors.push({ field: 'identificacion', message: 'El número de identificación no puede estar vacío' });
+    }
+
+    if (!data.direccion_principal) {
+      errors.push({ field: 'direccion_principal', message: 'La dirección principal es requerida' });
+    } else if (data.direccion_principal.trim().length < 10) {
+      errors.push({ field: 'direccion_principal', message: 'La dirección debe ser más específica (mínimo 10 caracteres)' });
+    }
+
+    if (!data.direccion_servicio) {
+      errors.push({ field: 'direccion_servicio', message: 'La dirección de servicio es requerida' });
+    } else if (data.direccion_servicio.trim().length < 10) {
+      errors.push({ field: 'direccion_servicio', message: 'La dirección debe ser más específica (mínimo 10 caracteres)' });
+    }
+
+    if (!data.tipo_cliente) {
+      errors.push({ field: 'tipo_cliente', message: 'El tipo de cliente es requerido' });
+    }
   }
 
   return errors;

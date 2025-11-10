@@ -1,10 +1,12 @@
+import { useState, useEffect } from "react";
 import Layout from "@/frontend/components/Layout";
 import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
+import { Textarea } from "@/frontend/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/frontend/components/ui/card";
 import { Label } from "@/frontend/components/ui/label";
-import { User, Mail, Phone, MapPin, CreditCard, Building2, Hash, Shield, Key, Edit2 } from "lucide-react";
-import { useState } from "react";
+import { Alert, AlertDescription } from "@/frontend/components/ui/alert";
+import { User, Mail, Phone, MapPin, CreditCard, Building2, Hash, Shield, Key, Edit2, CheckCircle2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,10 +16,317 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/frontend/components/ui/dialog";
+import { supabase } from "@/backend/config/supabaseClient";
+import { useAuth } from "@/frontend/context/AuthContext";
+import { useToast } from "@/frontend/context/ToastContext";
+import bcrypt from 'bcryptjs';
+
+interface PerfilData {
+  // Usuario
+  usuario_id: number;
+  username: string;
+  email: string;
+  telefono: string;
+  nombre_completo: string;
+  // Cliente
+  cliente_id: number;
+  tipo_identificacion: string;
+  identificacion: string;
+  direccion_principal: string;
+  direccion_servicio: string;
+  referencias_ubicacion: string;
+  tipo_cliente: string;
+  estado_cuenta: string;
+  plan_actual: string;
+}
 
 export default function Perfil() {
+  const { usuario, setUsuario } = useAuth();
+  const { success, error } = useToast();
+  
+  const [perfil, setPerfil] = useState<PerfilData | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  
   const [editingIdentity, setEditingIdentity] = useState(false);
   const [editingService, setEditingService] = useState(false);
+  
+  // Formularios
+  const [formIdentity, setFormIdentity] = useState({
+    nombre_completo: '',
+    email: '',
+    telefono: ''
+  });
+
+  const [formService, setFormService] = useState({
+    direccion_principal: '',
+    direccion_servicio: '',
+    referencias_ubicacion: ''
+  });
+
+  const [formPassword, setFormPassword] = useState({
+    contraseña_actual: '',
+    nueva_contraseña: '',
+    confirmar_contraseña: ''
+  });
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  useEffect(() => {
+    cargarPerfil();
+  }, [usuario]);
+
+  const cargarPerfil = async () => {
+    if (!usuario) return;
+
+    try {
+      setCargando(true);
+
+      // Convertir id_usuario a número si es necesario
+      const idUsuario = typeof usuario.id_usuario === 'string' 
+        ? parseInt(usuario.id_usuario, 10) 
+        : usuario.id_usuario;
+
+      // Obtener datos del usuario y cliente
+      const { data, error: queryError } = await supabase
+        .from('usuarios')
+        .select(`
+          id_usuario,
+          username,
+          email,
+          telefono,
+          nombre_completo,
+          clientes (
+            id_cliente,
+            tipo_identificacion,
+            identificacion,
+            direccion_principal,
+            direccion_servicio,
+            referencias_ubicacion,
+            tipo_cliente,
+            estado_cuenta,
+            plan_actual
+          )
+        `)
+        .eq('id_usuario', idUsuario)
+        .single();
+
+      if (queryError) throw queryError;
+
+      const clienteData = Array.isArray(data.clientes) ? data.clientes[0] : data.clientes;
+
+      const perfilData: PerfilData = {
+        usuario_id: data.id_usuario,
+        username: data.username,
+        email: data.email,
+        telefono: data.telefono || '',
+        nombre_completo: data.nombre_completo,
+        cliente_id: clienteData.id_cliente,
+        tipo_identificacion: clienteData.tipo_identificacion,
+        identificacion: clienteData.identificacion,
+        direccion_principal: clienteData.direccion_principal,
+        direccion_servicio: clienteData.direccion_servicio,
+        referencias_ubicacion: clienteData.referencias_ubicacion || '',
+        tipo_cliente: clienteData.tipo_cliente,
+        estado_cuenta: clienteData.estado_cuenta,
+        plan_actual: clienteData.plan_actual || 'Sin plan asignado'
+      };
+
+      setPerfil(perfilData);
+      
+      // Inicializar formularios
+      setFormIdentity({
+        nombre_completo: perfilData.nombre_completo,
+        email: perfilData.email,
+        telefono: perfilData.telefono
+      });
+
+      setFormService({
+        direccion_principal: perfilData.direccion_principal,
+        direccion_servicio: perfilData.direccion_servicio,
+        referencias_ubicacion: perfilData.referencias_ubicacion
+      });
+
+    } catch (err: any) {
+      console.error('Error cargando perfil:', err);
+      error('Error', 'No se pudo cargar la información del perfil');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const handleSaveIdentity = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!perfil) return;
+
+    setGuardando(true);
+    try {
+      // Actualizar usuario
+      const { error: updateError } = await supabase
+        .from('usuarios')
+        .update({
+          nombre_completo: formIdentity.nombre_completo,
+          email: formIdentity.email,
+          telefono: formIdentity.telefono
+        })
+        .eq('id_usuario', perfil.usuario_id);
+
+      if (updateError) throw updateError;
+
+      // Actualizar estado local
+      setPerfil({
+        ...perfil,
+        nombre_completo: formIdentity.nombre_completo,
+        email: formIdentity.email,
+        telefono: formIdentity.telefono
+      });
+
+      // Actualizar contexto de auth
+      if (usuario) {
+        setUsuario({
+          ...usuario,
+          nombre_completo: formIdentity.nombre_completo,
+          email: formIdentity.email,
+          telefono: formIdentity.telefono
+        });
+      }
+
+      setEditingIdentity(false);
+      success('Cambios guardados', 'Tu información personal ha sido actualizada');
+    } catch (err: any) {
+      console.error('Error guardando:', err);
+      error('Error', 'No se pudieron guardar los cambios');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleSaveService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!perfil) return;
+
+    setGuardando(true);
+    try {
+      // Actualizar cliente
+      const { error: updateError } = await supabase
+        .from('clientes')
+        .update({
+          direccion_principal: formService.direccion_principal,
+          direccion_servicio: formService.direccion_servicio,
+          referencias_ubicacion: formService.referencias_ubicacion
+        })
+        .eq('id_cliente', perfil.cliente_id);
+
+      if (updateError) throw updateError;
+
+      // Actualizar estado local
+      setPerfil({
+        ...perfil,
+        direccion_principal: formService.direccion_principal,
+        direccion_servicio: formService.direccion_servicio,
+        referencias_ubicacion: formService.referencias_ubicacion
+      });
+
+      setEditingService(false);
+      success('Cambios guardados', 'Tu información de servicio ha sido actualizada');
+    } catch (err: any) {
+      console.error('Error guardando:', err);
+      error('Error', 'No se pudieron guardar los cambios');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!perfil) return;
+
+    // Validaciones
+    if (!formPassword.contraseña_actual || !formPassword.nueva_contraseña || !formPassword.confirmar_contraseña) {
+      error('Campos requeridos', 'Por favor completa todos los campos');
+      return;
+    }
+
+    if (formPassword.nueva_contraseña.length < 6) {
+      error('Contraseña débil', 'La nueva contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    if (formPassword.nueva_contraseña !== formPassword.confirmar_contraseña) {
+      error('Contraseñas no coinciden', 'Las contraseñas nuevas no coinciden');
+      return;
+    }
+
+    setGuardando(true);
+    try {
+      // Obtener contraseña actual de la BD
+      const { data: userData, error: fetchError } = await supabase
+        .from('usuarios')
+        .select('contraseña')
+        .eq('id_usuario', perfil.usuario_id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Verificar contraseña actual
+      const esValida = await bcrypt.compare(formPassword.contraseña_actual, (userData as any).contraseña);
+      
+      if (!esValida) {
+        error('Contraseña incorrecta', 'La contraseña actual no es correcta');
+        setGuardando(false);
+        return;
+      }
+
+      // Encriptar nueva contraseña
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(formPassword.nueva_contraseña, salt);
+
+      // Actualizar contraseña
+      const { error: updateError } = await supabase
+        .from('usuarios')
+        .update({ contraseña: hashedPassword })
+        .eq('id_usuario', perfil.usuario_id);
+
+      if (updateError) throw updateError;
+
+      // Limpiar formulario y cerrar dialog
+      setFormPassword({
+        contraseña_actual: '',
+        nueva_contraseña: '',
+        confirmar_contraseña: ''
+      });
+      setDialogOpen(false);
+      success('Contraseña actualizada', 'Tu contraseña ha sido cambiada exitosamente');
+    } catch (err: any) {
+      console.error('Error cambiando contraseña:', err);
+      error('Error', 'No se pudo cambiar la contraseña');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  if (cargando) {
+    return (
+      <Layout role="client">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-muted-foreground">Cargando perfil...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!perfil) {
+    return (
+      <Layout role="client">
+        <Alert variant="destructive">
+          <AlertDescription>No se pudo cargar la información del perfil</AlertDescription>
+        </Alert>
+      </Layout>
+    );
+  }
 
   return (
     <Layout role="client">
@@ -52,12 +361,13 @@ export default function Perfil() {
             </div>
           </CardHeader>
           <CardContent>
-            <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); setEditingIdentity(false); }}>
+            <form className="space-y-6" onSubmit={handleSaveIdentity}>
               <div className="space-y-2">
                 <Label htmlFor="full-name">Nombre Completo</Label>
                 <Input 
                   id="full-name" 
-                  defaultValue="Carlos Rodríguez" 
+                  value={formIdentity.nombre_completo}
+                  onChange={(e) => setFormIdentity({...formIdentity, nombre_completo: e.target.value})}
                   disabled={!editingIdentity}
                 />
               </div>
@@ -70,7 +380,8 @@ export default function Perfil() {
                 <Input 
                   id="email" 
                   type="email" 
-                  defaultValue="carlos@email.com" 
+                  value={formIdentity.email}
+                  onChange={(e) => setFormIdentity({...formIdentity, email: e.target.value})}
                   disabled={!editingIdentity}
                 />
               </div>
@@ -83,18 +394,29 @@ export default function Perfil() {
                 <Input 
                   id="phone" 
                   type="tel" 
-                  defaultValue="+506 8888-8888" 
+                  value={formIdentity.telefono}
+                  onChange={(e) => setFormIdentity({...formIdentity, telefono: e.target.value})}
                   disabled={!editingIdentity}
+                  placeholder="0424-1234567"
                 />
               </div>
 
               {editingIdentity && (
                 <div className="flex gap-3">
-                  <Button type="submit" className="flex-1">Guardar Cambios</Button>
+                  <Button type="submit" className="flex-1" disabled={guardando}>
+                    {guardando ? 'Guardando...' : 'Guardar Cambios'}
+                  </Button>
                   <Button 
                     type="button" 
                     variant="outline"
-                    onClick={() => setEditingIdentity(false)}
+                    onClick={() => {
+                      setEditingIdentity(false);
+                      setFormIdentity({
+                        nombre_completo: perfil.nombre_completo,
+                        email: perfil.email,
+                        telefono: perfil.telefono
+                      });
+                    }}
                   >
                     Cancelar
                   </Button>
@@ -116,8 +438,13 @@ export default function Perfil() {
           <CardContent>
             <div className="space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="username">Nombre de Usuario</Label>
+                <Input id="username" value={perfil.username} disabled />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="id-type">Tipo de Identificación</Label>
-                <Input id="id-type" defaultValue="Cédula Nacional" disabled />
+                <Input id="id-type" value={perfil.tipo_identificacion} disabled />
               </div>
 
               <div className="space-y-2">
@@ -125,12 +452,7 @@ export default function Perfil() {
                   <Hash className="h-4 w-4" />
                   Número de Identificación
                 </Label>
-                <Input id="id-number" defaultValue="1-2345-6789" disabled />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="username">Nombre de Usuario</Label>
-                <Input id="username" defaultValue="carlos.rodriguez" disabled />
+                <Input id="id-number" value={perfil.identificacion} disabled />
               </div>
             </div>
           </CardContent>
@@ -146,7 +468,7 @@ export default function Perfil() {
             <CardDescription>Gestión de contraseña y acceso</CardDescription>
           </CardHeader>
           <CardContent>
-            <Dialog>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" className="w-full flex items-center gap-2">
                   <Key className="h-4 w-4" />
@@ -154,29 +476,52 @@ export default function Perfil() {
                 </Button>
               </DialogTrigger>
               <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Cambiar Contraseña</DialogTitle>
-                  <DialogDescription>
-                    Introduce tu contraseña actual y la nueva contraseña que deseas establecer.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="current-password">Contraseña Actual</Label>
-                    <Input id="current-password" type="password" />
+                <form onSubmit={handleChangePassword}>
+                  <DialogHeader>
+                    <DialogTitle>Cambiar Contraseña</DialogTitle>
+                    <DialogDescription>
+                      Introduce tu contraseña actual y la nueva contraseña que deseas establecer.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="current-password">Contraseña Actual *</Label>
+                      <Input 
+                        id="current-password" 
+                        type="password"
+                        value={formPassword.contraseña_actual}
+                        onChange={(e) => setFormPassword({...formPassword, contraseña_actual: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-password">Nueva Contraseña * (mínimo 6 caracteres)</Label>
+                      <Input 
+                        id="new-password" 
+                        type="password"
+                        value={formPassword.nueva_contraseña}
+                        onChange={(e) => setFormPassword({...formPassword, nueva_contraseña: e.target.value})}
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password">Confirmar Nueva Contraseña *</Label>
+                      <Input 
+                        id="confirm-password" 
+                        type="password"
+                        value={formPassword.confirmar_contraseña}
+                        onChange={(e) => setFormPassword({...formPassword, confirmar_contraseña: e.target.value})}
+                        required
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">Nueva Contraseña</Label>
-                    <Input id="new-password" type="password" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirmar Nueva Contraseña</Label>
-                    <Input id="confirm-password" type="password" />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Actualizar Contraseña</Button>
-                </DialogFooter>
+                  <DialogFooter>
+                    <Button type="submit" disabled={guardando}>
+                      {guardando ? 'Actualizando...' : 'Actualizar Contraseña'}
+                    </Button>
+                  </DialogFooter>
+                </form>
               </DialogContent>
             </Dialog>
           </CardContent>
@@ -207,51 +552,81 @@ export default function Perfil() {
             </div>
           </CardHeader>
           <CardContent>
-            <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); setEditingService(false); }}>
+            <form className="space-y-6" onSubmit={handleSaveService}>
               <div className="space-y-2">
                 <Label htmlFor="address" className="flex items-center gap-2">
                   <MapPin className="h-4 w-4" />
                   Dirección Principal
                 </Label>
-                <Input 
+                <Textarea 
                   id="address" 
-                  defaultValue="San José, Costa Rica" 
+                  value={formService.direccion_principal}
+                  onChange={(e) => setFormService({...formService, direccion_principal: e.target.value})}
                   disabled={!editingService}
+                  rows={2}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="service-address">Dirección de Servicio</Label>
+                <Textarea 
+                  id="service-address" 
+                  value={formService.direccion_servicio}
+                  onChange={(e) => setFormService({...formService, direccion_servicio: e.target.value})}
+                  disabled={!editingService}
+                  rows={2}
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="references">Referencias de Ubicación</Label>
-                <Input 
+                <Textarea 
                   id="references" 
-                  defaultValue="100 metros norte de la iglesia" 
+                  value={formService.referencias_ubicacion}
+                  onChange={(e) => setFormService({...formService, referencias_ubicacion: e.target.value})}
                   disabled={!editingService}
+                  placeholder="Puntos de referencia, indicaciones, etc."
+                  rows={2}
                 />
               </div>
 
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="plan">Plan Actual</Label>
-                  <Input id="plan" defaultValue="Plan Premium" disabled />
+                  <Label htmlFor="client-type">Tipo de Cliente</Label>
+                  <Input id="client-type" value={perfil.tipo_cliente} disabled />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="client-type">Tipo de Cliente</Label>
-                  <Input id="client-type" defaultValue="Residencial" disabled />
+                  <Label htmlFor="plan">Plan Actual</Label>
+                  <Input id="plan" value={perfil.plan_actual} disabled />
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="account-status">Estado de la Cuenta</Label>
-                <Input id="account-status" defaultValue="Activo" disabled />
+                <div className="flex items-center gap-2">
+                  <Input id="account-status" value={perfil.estado_cuenta} disabled className="flex-1" />
+                  {perfil.estado_cuenta === 'Activo' && (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  )}
+                </div>
               </div>
 
               {editingService && (
                 <div className="flex gap-3">
-                  <Button type="submit" className="flex-1">Guardar Cambios</Button>
+                  <Button type="submit" className="flex-1" disabled={guardando}>
+                    {guardando ? 'Guardando...' : 'Guardar Cambios'}
+                  </Button>
                   <Button 
                     type="button" 
                     variant="outline"
-                    onClick={() => setEditingService(false)}
+                    onClick={() => {
+                      setEditingService(false);
+                      setFormService({
+                        direccion_principal: perfil.direccion_principal,
+                        direccion_servicio: perfil.direccion_servicio,
+                        referencias_ubicacion: perfil.referencias_ubicacion
+                      });
+                    }}
                   >
                     Cancelar
                   </Button>

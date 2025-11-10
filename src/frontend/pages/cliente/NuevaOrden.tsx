@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from "@/frontend/components/ui/alert";
 import { FileText, MapPin, AlertCircle, CheckCircle2, Home } from "lucide-react";
 import { useAuth } from "@/frontend/context/AuthContext";
 import { supabase } from "@/backend/config/supabaseClient";
-import { useToast } from "@/frontend/hooks/useToast";
+import { useToast } from "@/frontend/context/ToastContext";
 
 interface ClienteData {
   id_cliente: number;
@@ -49,7 +49,7 @@ export default function NuevaOrden() {
         const { data, error } = await supabase
           .from('clientes')
           .select('*')
-          .eq('id_usuario', usuario.id_usuario)
+          .eq('id_usuario', typeof usuario.id_usuario === 'string' ? parseInt(usuario.id_usuario, 10) : usuario.id_usuario)
           .single();
 
         if (error) throw error;
@@ -91,8 +91,8 @@ export default function NuevaOrden() {
 
     if (!formData.descripcion_solicitud.trim()) {
       nuevosErrores.descripcion_solicitud = "La descripción es obligatoria";
-    } else if (formData.descripcion_solicitud.trim().length < 10) {
-      nuevosErrores.descripcion_solicitud = "La descripción debe tener al menos 10 caracteres";
+    } else if (formData.descripcion_solicitud.trim().length < 20) {
+      nuevosErrores.descripcion_solicitud = "La descripción debe tener al menos 20 caracteres";
     }
 
     if (!formData.direccion_servicio.trim()) {
@@ -205,18 +205,6 @@ export default function NuevaOrden() {
           </p>
         </div>
 
-        {/* Información del cliente */}
-        {clienteData && (
-          <Alert className="bg-blue-50 border-blue-200">
-            <AlertCircle className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-blue-800">
-              <strong>Cliente:</strong> {usuario?.nombre_completo} | 
-              <strong> Tipo:</strong> {clienteData.tipo_cliente} | 
-              <strong> Plan:</strong> {clienteData.plan_actual || 'Sin plan asignado'}
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* Formulario */}
         <form onSubmit={handleSubmit} className="space-y-6">
           <Card>
@@ -313,7 +301,7 @@ export default function NuevaOrden() {
                   <p className="text-sm text-red-600">{errores.descripcion_solicitud}</p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Mínimo 10 caracteres. Sé específico para una mejor atención.
+                  Mínimo 20 caracteres. Sé específico para una mejor atención.
                 </p>
               </div>
             </CardContent>
