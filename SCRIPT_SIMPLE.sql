@@ -36,3 +36,4 @@ ORDER BY conname;
 -- constraint_definition: CHECK ((estado_resultado IS NULL) OR ...)
 -- ============================================================
 
+

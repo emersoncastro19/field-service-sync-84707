@@ -15,7 +15,6 @@ interface Orden {
   numero_orden: string;
   tipo_servicio: string;
   estado: string;
-  prioridad: string;
   fecha_solicitud: string;
   fecha_asignacion: string | null;
   direccion_servicio: string;
@@ -106,7 +105,6 @@ export default function TecnicoOrdenes() {
           numero_orden,
           tipo_servicio,
           estado,
-          prioridad,
           fecha_solicitud,
           fecha_asignacion,
           direccion_servicio,
@@ -148,7 +146,6 @@ export default function TecnicoOrdenes() {
           numero_orden: orden.numero_orden,
           tipo_servicio: orden.tipo_servicio,
           estado: orden.estado,
-          prioridad: orden.prioridad,
           fecha_solicitud: orden.fecha_solicitud,
           fecha_asignacion: orden.fecha_asignacion,
           direccion_servicio: orden.direccion_servicio,
@@ -183,20 +180,6 @@ export default function TecnicoOrdenes() {
     });
   };
 
-  const getPrioridadBadge = (prioridad: string) => {
-    const estilos: Record<string, string> = {
-      'Baja': 'bg-blue-100 text-blue-800',
-      'Media': 'bg-yellow-100 text-yellow-800',
-      'Alta': 'bg-orange-100 text-orange-800',
-      'Crítica': 'bg-red-100 text-red-800',
-    };
-
-    return (
-      <Badge variant="outline" className={estilos[prioridad] || estilos['Media']}>
-        {prioridad}
-      </Badge>
-    );
-  };
 
   if (cargando) {
     return (
@@ -259,7 +242,6 @@ export default function TecnicoOrdenes() {
                           <StatusIcon className="h-3 w-3 mr-1" />
                           {statusInfo.label}
                         </Badge>
-                        {getPrioridadBadge(orden.prioridad)}
                       </div>
                     </div>
                   </CardHeader>

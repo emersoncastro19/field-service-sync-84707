@@ -32,7 +32,6 @@ interface Cita {
     tipo_servicio: string;
     direccion_servicio: string;
     estado: string;
-    prioridad: string;
     descripcion_solicitud: string;
     cliente: {
       nombre_completo: string;
@@ -94,7 +93,6 @@ export default function TecnicoCitas() {
           tipo_servicio,
           direccion_servicio,
           estado,
-          prioridad,
           descripcion_solicitud,
           clientes!inner (
             usuarios!inner (
@@ -135,7 +133,6 @@ export default function TecnicoCitas() {
             tipo_servicio: orden?.tipo_servicio || '',
             direccion_servicio: orden?.direccion_servicio || '',
             estado: orden?.estado || '',
-            prioridad: orden?.prioridad || '',
             descripcion_solicitud: orden?.descripcion_solicitud || '',
             cliente: {
               nombre_completo: orden?.clientes?.usuarios?.nombre_completo || '',
@@ -211,20 +208,6 @@ export default function TecnicoCitas() {
     );
   };
 
-  const getPrioridadBadge = (prioridad: string) => {
-    const estilos: Record<string, string> = {
-      'Baja': 'bg-blue-100 text-blue-800',
-      'Media': 'bg-yellow-100 text-yellow-800',
-      'Alta': 'bg-orange-100 text-orange-800',
-      'Crítica': 'bg-red-100 text-red-800',
-    };
-
-    return (
-      <Badge variant="outline" className={estilos[prioridad] || estilos['Media']}>
-        {prioridad}
-      </Badge>
-    );
-  };
 
   const formatFecha = (fecha: string) => {
     return new Date(fecha).toLocaleDateString('es-VE', {
@@ -339,7 +322,6 @@ export default function TecnicoCitas() {
                     </div>
                     <div className="flex flex-col gap-2 items-end">
                       {getEstadoBadge(cita.estado_cita)}
-                      {getPrioridadBadge(cita.orden.prioridad)}
                     </div>
                   </div>
                 </CardHeader>
@@ -436,12 +418,6 @@ export default function TecnicoCitas() {
                   <div>
                     <Label className="text-sm font-semibold">Estado de la Orden</Label>
                     <Badge>{citaSeleccionada.orden.estado}</Badge>
-                  </div>
-                  <div>
-                    <Label className="text-sm font-semibold">Prioridad</Label>
-                    <div className="mt-1">
-                      {getPrioridadBadge(citaSeleccionada.orden.prioridad)}
-                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>

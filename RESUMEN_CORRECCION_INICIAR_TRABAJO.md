@@ -71,3 +71,4 @@ const ejecucionData = {
 - `FLUJO_NORMAL_SISTEMA.md` - Documentación completa del flujo del sistema
 - `RESUMEN_CORRECCION_INICIAR_TRABAJO.md` - Este archivo
 
+

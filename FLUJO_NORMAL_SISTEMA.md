@@ -299,3 +299,4 @@ Este flujo asegura que:
 - ✅ Se registre toda la información para auditoría
 - ✅ El sistema sea transparente y trazable
 
+

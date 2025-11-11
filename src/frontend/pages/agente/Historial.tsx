@@ -14,7 +14,6 @@ interface OrdenHistorial {
   id_orden: number;
   numero_orden: string;
   tipo_servicio: string;
-  prioridad: string;
   estado: string;
   fecha_solicitud: string;
   fecha_validacion?: string;
@@ -49,7 +48,6 @@ export default function Historial() {
           id_orden,
           numero_orden,
           tipo_servicio,
-          prioridad,
           estado,
           fecha_solicitud,
           descripcion_solicitud,
@@ -72,7 +70,6 @@ export default function Historial() {
         id_orden: orden.id_orden,
         numero_orden: orden.numero_orden,
         tipo_servicio: orden.tipo_servicio,
-        prioridad: orden.prioridad,
         estado: orden.estado,
         fecha_solicitud: orden.fecha_solicitud,
         descripcion_solicitud: orden.descripcion_solicitud,
@@ -112,20 +109,6 @@ export default function Historial() {
     );
   };
 
-  const getPrioridadBadge = (prioridad: string) => {
-    const estilos: Record<string, string> = {
-      'Baja': 'bg-blue-100 text-blue-800',
-      'Media': 'bg-yellow-100 text-yellow-800',
-      'Alta': 'bg-orange-100 text-orange-800',
-      'Crítica': 'bg-red-100 text-red-800',
-    };
-
-    return (
-      <Badge variant="outline" className={estilos[prioridad] || ''}>
-        {prioridad}
-      </Badge>
-    );
-  };
 
   const formatFecha = (fecha: string) => {
     return new Date(fecha).toLocaleDateString('es-VE', {
@@ -261,7 +244,6 @@ export default function Historial() {
                         <div className="flex items-center gap-2">
                           <p className="font-semibold">{orden.numero_orden}</p>
                           {getEstadoBadge(orden.estado)}
-                          {getPrioridadBadge(orden.prioridad)}
                         </div>
                         <div className="flex items-center gap-2 text-sm">
                           <User className="h-4 w-4 text-muted-foreground" />

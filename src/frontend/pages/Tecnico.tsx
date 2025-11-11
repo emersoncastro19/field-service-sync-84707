@@ -14,7 +14,6 @@ interface Orden {
   numero_orden: string;
   tipo_servicio: string;
   estado: string;
-  prioridad: string;
   fecha_asignacion: string;
   direccion_servicio: string;
   cliente: {
@@ -92,7 +91,6 @@ export default function Tecnico() {
           numero_orden,
           tipo_servicio,
           estado,
-          prioridad,
           fecha_asignacion,
           direccion_servicio,
           descripcion_solicitud,
@@ -137,7 +135,6 @@ export default function Tecnico() {
           numero_orden: orden.numero_orden,
           tipo_servicio: orden.tipo_servicio,
           estado: orden.estado,
-          prioridad: orden.prioridad,
           fecha_asignacion: orden.fecha_asignacion,
           direccion_servicio: orden.direccion_servicio,
           cliente: {
@@ -167,22 +164,15 @@ export default function Tecnico() {
     });
   };
 
-  const getPrioridadBadge = (prioridad: string) => {
-    const estilos: Record<string, string> = {
-      'Baja': 'bg-blue-100 text-blue-800',
-      'Media': 'bg-yellow-100 text-yellow-800',
-      'Alta': 'bg-orange-100 text-orange-800',
-      'Crítica': 'bg-red-100 text-red-800',
-    };
-    return <Badge className={estilos[prioridad] || estilos['Media']}>{prioridad}</Badge>;
-  };
 
   return (
     <Layout role="technician">
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Panel del Técnico</h1>
-          <p className="text-muted-foreground">Gestiona tus servicios asignados</p>
+          <h1 className="text-3xl font-bold tracking-tight">Panel de Control</h1>
+          <p className="text-muted-foreground">
+            Bienvenido, {usuario?.nombre_completo}
+          </p>
         </div>
 
         <DashboardCard
@@ -231,7 +221,6 @@ export default function Tecnico() {
                         </div>
                       )}
                     </div>
-                    {getPrioridadBadge(orden.prioridad)}
                   </div>
                   <div className="flex gap-2">
                     <Button 

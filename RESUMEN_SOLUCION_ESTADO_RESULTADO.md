@@ -114,3 +114,4 @@ ORDER BY conname;
 
 Esto te mostrará todos los constraints CHECK de la tabla, y podrás ver si el nuevo constraint se creó correctamente.
 
+

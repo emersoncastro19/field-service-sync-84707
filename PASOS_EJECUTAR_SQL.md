@@ -132,3 +132,4 @@ AND conname = 'ejecuciones_servicio_estado_resultado_check';
 - `EJECUTAR_ESTE_SQL.sql` - Script alternativo
 - `PASOS_EJECUTAR_SQL.md` - Este archivo
 
+

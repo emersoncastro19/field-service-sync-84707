@@ -135,3 +135,4 @@ SELECT * FROM ejecuciones_servicio WHERE estado_resultado = 'En Proceso' ORDER B
 - `src/frontend/pages/tecnico/GestionarEjecucion.tsx` - Código mejorado con logging detallado
 - `VERIFICAR_RLS_EJECUCIONES.md` - Este archivo
 
+

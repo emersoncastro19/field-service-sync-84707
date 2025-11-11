@@ -42,3 +42,4 @@ ORDER BY estado_resultado;
 -- - O simplemente NULL al inicio
 -- ============================================================
 
+

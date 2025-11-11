@@ -85,3 +85,4 @@ Después de ejecutar el SQL, el sistema podrá:
 
 Esto es más flexible y permite que el estado se establezca correctamente en cada etapa del proceso.
 
+

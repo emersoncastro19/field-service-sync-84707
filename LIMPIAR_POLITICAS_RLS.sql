@@ -35,3 +35,4 @@ ORDER BY cmd, policyname;
 -- 3. "Permitir actualizar todas las notificaciones (desarrollo)" - UPDATE
 -- ============================================================
 
+

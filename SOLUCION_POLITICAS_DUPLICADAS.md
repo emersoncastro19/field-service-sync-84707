@@ -129,3 +129,4 @@ Después de eliminar las políticas duplicadas, las notificaciones deberían fun
 
 Ejecuta el script de limpieza y prueba el sistema. Las notificaciones deberían funcionar correctamente ahora.
 
+

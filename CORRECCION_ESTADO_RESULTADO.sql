@@ -46,3 +46,4 @@ AND conname LIKE '%estado_resultado%';
 -- - estado_resultado = 'Completado' (al finalizar)
 -- ============================================================
 
+

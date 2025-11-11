@@ -30,7 +30,6 @@ interface Orden {
   id_orden: number;
   numero_orden: string;
   tipo_servicio: string;
-  prioridad: string;
   estado: string;
   fecha_solicitud: string;
   direccion_servicio: string;
@@ -79,7 +78,6 @@ export default function AsignarOrdenes() {
           id_orden,
           numero_orden,
           tipo_servicio,
-          prioridad,
           estado,
           fecha_solicitud,
           direccion_servicio,
@@ -102,7 +100,6 @@ export default function AsignarOrdenes() {
         id_orden: orden.id_orden,
         numero_orden: orden.numero_orden,
         tipo_servicio: orden.tipo_servicio,
-        prioridad: orden.prioridad,
         estado: orden.estado,
         fecha_solicitud: orden.fecha_solicitud,
         direccion_servicio: orden.direccion_servicio,
@@ -114,13 +111,38 @@ export default function AsignarOrdenes() {
 
       setOrdenes(ordenesFormateadas);
 
-      // Cargar técnicos disponibles con especialidades
+      // 1. Obtener el ID del coordinador logueado
+      const idUsuario = typeof usuario.id_usuario === 'string' 
+        ? parseInt(usuario.id_usuario, 10) 
+        : usuario.id_usuario;
+
+      const { data: coordinadorData, error: coordinadorError } = await supabase
+        .from('coordinadores_campo')
+        .select('id_coordinador, zona_responsabilidad')
+        .eq('id_usuario', idUsuario)
+        .maybeSingle();
+
+      if (coordinadorError) throw coordinadorError;
+
+      const idCoordinador = coordinadorData?.id_coordinador || null;
+
+      // 2. Cargar técnicos asignados a este coordinador (por id_coordinador_supervisor)
+      if (!idCoordinador) {
+        // Si no hay id_coordinador, no hay técnicos disponibles para asignar
+        console.warn('⚠️ El coordinador no tiene un id_coordinador asignado. No se pueden cargar técnicos.');
+        setTecnicos([]);
+        setCargando(false);
+        error('Error', 'No se encontró el ID del coordinador. Contacta al administrador.');
+        return;
+      }
+
       const { data: tecnicosData, error: tecnicosError } = await supabase
         .from('tecnicos')
         .select(`
           id_tecnico,
           zona_cobertura,
           disponibilidad,
+          id_coordinador_supervisor,
           usuarios!inner (
             nombre_completo,
             telefono
@@ -129,7 +151,8 @@ export default function AsignarOrdenes() {
             especialidad
           )
         `)
-        .eq('disponibilidad', 'Activo');
+        .eq('disponibilidad', 'Activo')
+        .eq('id_coordinador_supervisor', idCoordinador);
 
       if (tecnicosError) throw tecnicosError;
 
@@ -175,16 +198,67 @@ export default function AsignarOrdenes() {
       const tecnicoId = parseInt(tecnicoSeleccionado);
       
       // Combinar fecha y hora para crear fecha_programada
-      const fechaProgramada = new Date(`${fechaCita}T${horaCita}:00`).toISOString();
+      // PROBLEMA: Cuando se usa new Date() con una cadena de fecha/hora sin zona horaria,
+      // JavaScript la interpreta como hora local, pero .toISOString() la convierte a UTC.
+      // Esto puede cambiar la fecha/hora dependiendo de la zona horaria del usuario.
+      // 
+      // SOLUCIÓN: Crear la fecha usando las partes individuales (año, mes, día, hora, minuto)
+      // en hora local, y luego convertir a ISO. Esto preserva correctamente la hora local
+      // que el usuario seleccionó, convirtiéndola apropiadamente a UTC para almacenamiento.
+      const [year, month, day] = fechaCita.split('-').map(Number);
+      const [hours, minutes] = horaCita.split(':').map(Number);
+      
+      // Crear Date object en hora local (mes es 0-indexed, por eso month - 1)
+      // Esto crea la fecha exacta que el usuario seleccionó en su zona horaria local
+      const fechaLocal = new Date(year, month - 1, day, hours, minutes, 0, 0);
+      
+      // Convertir a ISO string (UTC). Esta conversión es correcta porque:
+      // - Si el usuario selecciona 10:00 en UTC-4, se guarda como 14:00 UTC
+      // - Cuando se lee y se convierte de vuelta a hora local, se muestra como 10:00 ✓
+      const fechaProgramada = fechaLocal.toISOString();
+      
+      console.log('📅 Fecha y hora de cita:', {
+        fechaCita,
+        horaCita,
+        fechaLocal: fechaLocal.toLocaleString('es-VE', { timeZone: 'America/Caracas' }),
+        fechaProgramada,
+        zonaHoraria: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        offset: fechaLocal.getTimezoneOffset() / 60
+      });
 
-      // 1. Actualizar la orden con el técnico asignado
+      // 0. Obtener el ID del coordinador que está asignando
+      const idUsuario = typeof usuario.id_usuario === 'string' 
+        ? parseInt(usuario.id_usuario, 10) 
+        : usuario.id_usuario;
+
+      const { data: coordinadorData, error: coordinadorError } = await supabase
+        .from('coordinadores_campo')
+        .select('id_coordinador')
+        .eq('id_usuario', idUsuario)
+        .maybeSingle();
+
+      if (coordinadorError) {
+        console.error('Error obteniendo coordinador:', coordinadorError);
+      }
+
+      const idCoordinador = coordinadorData?.id_coordinador || null;
+
+      // 1. Actualizar la orden con el técnico asignado y el coordinador que asignó
+      const datosActualizacion: any = {
+        id_tecnico_asignado: tecnicoId,
+        estado: 'Asignada',
+        fecha_asignacion: new Date().toISOString()
+      };
+
+      // Agregar id_coordinador_supervisor (el campo que ya existe en la BD)
+      if (idCoordinador !== null) {
+        // Convertir a bigint si es necesario
+        datosActualizacion.id_coordinador_supervisor = idCoordinador;
+      }
+
       const { error: updateError } = await supabase
         .from('ordenes_servicio')
-        .update({
-          id_tecnico_asignado: tecnicoId,
-          estado: 'Asignada',
-          fecha_asignacion: new Date().toISOString()
-        })
+        .update(datosActualizacion)
         .eq('id_orden', ordenSeleccionada.id_orden);
 
       if (updateError) throw updateError;
@@ -486,20 +560,6 @@ export default function AsignarOrdenes() {
     });
   };
 
-  const getPrioridadBadge = (prioridad: string) => {
-    const estilos: Record<string, string> = {
-      'Baja': 'bg-blue-100 text-blue-800',
-      'Media': 'bg-yellow-100 text-yellow-800',
-      'Alta': 'bg-orange-100 text-orange-800',
-      'Crítica': 'bg-red-100 text-red-800',
-    };
-
-    return (
-      <Badge className={estilos[prioridad] || estilos['Media']}>
-        {prioridad}
-      </Badge>
-    );
-  };
 
   if (cargando) {
     return (
@@ -519,7 +579,7 @@ export default function AsignarOrdenes() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Asignar o Reasignar Órdenes</h1>
+          <h1 className="text-3xl font-bold text-foreground">Asignar Órdenes</h1>
           <p className="text-muted-foreground mt-2">
             Asigna técnicos a las órdenes de servicio validadas ({ordenes.length} {ordenes.length === 1 ? 'orden' : 'órdenes'} pendientes, {tecnicos.length} técnicos activos disponibles)
           </p>
@@ -566,7 +626,6 @@ export default function AsignarOrdenes() {
                   </div>
                   <div className="flex flex-col gap-2 items-end">
                     <Badge variant="secondary">{orden.estado}</Badge>
-                    {getPrioridadBadge(orden.prioridad)}
                   </div>
                 </div>
               </CardHeader>
@@ -626,7 +685,6 @@ export default function AsignarOrdenes() {
                 <div className="p-4 bg-muted rounded-lg space-y-2">
                   <p className="text-sm"><strong>Cliente:</strong> {ordenSeleccionada.cliente.nombre_completo}</p>
                   <p className="text-sm"><strong>Tipo:</strong> {ordenSeleccionada.tipo_servicio}</p>
-                  <p className="text-sm"><strong>Prioridad:</strong> {ordenSeleccionada.prioridad}</p>
                 </div>
               )}
 

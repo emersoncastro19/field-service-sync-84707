@@ -64,7 +64,7 @@ export default function Ayuda() {
     },
     {
       question: "¿Cómo asigno un técnico a una orden?",
-      answer: "Los coordinadores pueden asignar técnicos desde el panel 'Asignar o Reasignar Órdenes'. Selecciona la orden y elige el técnico disponible con las especialidades requeridas."
+      answer: "Los coordinadores pueden asignar técnicos desde el panel 'Asignar Órdenes'. Selecciona la orden y elige el técnico disponible con las especialidades requeridas."
     },
     {
       question: "¿Cómo confirmo que un servicio fue realizado?",

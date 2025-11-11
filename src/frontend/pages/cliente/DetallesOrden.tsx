@@ -19,7 +19,6 @@ interface OrdenDetalle {
   id_orden: number;
   numero_orden: string;
   tipo_servicio: string;
-  prioridad: string;
   descripcion_solicitud: string;
   direccion_servicio: string;
   estado: string;
@@ -350,20 +349,6 @@ export default function ClienteDetallesOrden() {
     );
   };
 
-  const getPrioridadBadge = (prioridad: string) => {
-    const estilos: Record<string, string> = {
-      'Baja': 'bg-blue-100 text-blue-800',
-      'Media': 'bg-yellow-100 text-yellow-800',
-      'Alta': 'bg-orange-100 text-orange-800',
-      'Crítica': 'bg-red-100 text-red-800',
-    };
-
-    return (
-      <Badge className={estilos[prioridad] || estilos['Media']}>
-        {prioridad}
-      </Badge>
-    );
-  };
 
   const formatFecha = (fecha: string | null) => {
     if (!fecha) return 'No definida';
@@ -440,12 +425,6 @@ export default function ClienteDetallesOrden() {
                     <div className="flex items-center gap-2 mt-1">
                       <Package className="h-4 w-4 text-primary" />
                       <p className="font-medium">{orden.tipo_servicio}</p>
-                  </div>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Prioridad</p>
-                    <div className="mt-1">
-                      {getPrioridadBadge(orden.prioridad)}
                   </div>
                   </div>
                 </div>

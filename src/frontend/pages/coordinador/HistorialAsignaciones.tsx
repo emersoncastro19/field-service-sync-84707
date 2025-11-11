@@ -14,7 +14,6 @@ interface OrdenAsignada {
   id_orden: number;
   numero_orden: string;
   tipo_servicio: string;
-  prioridad: string;
   estado: string;
   fecha_solicitud: string;
   fecha_asignacion: string | null;
@@ -58,7 +57,6 @@ export default function HistorialAsignaciones() {
           id_orden,
           numero_orden,
           tipo_servicio,
-          prioridad,
           estado,
           fecha_solicitud,
           fecha_asignacion,
@@ -93,7 +91,6 @@ export default function HistorialAsignaciones() {
         id_orden: orden.id_orden,
         numero_orden: orden.numero_orden,
         tipo_servicio: orden.tipo_servicio,
-        prioridad: orden.prioridad,
         estado: orden.estado,
         fecha_solicitud: orden.fecha_solicitud,
         fecha_asignacion: orden.fecha_asignacion,
@@ -142,20 +139,6 @@ export default function HistorialAsignaciones() {
     );
   };
 
-  const getPrioridadBadge = (prioridad: string) => {
-    const estilos: Record<string, string> = {
-      'Baja': 'bg-blue-100 text-blue-800',
-      'Media': 'bg-yellow-100 text-yellow-800',
-      'Alta': 'bg-orange-100 text-orange-800',
-      'Crítica': 'bg-red-100 text-red-800',
-    };
-
-    return (
-      <Badge variant="outline" className={estilos[prioridad] || ''}>
-        {prioridad}
-      </Badge>
-    );
-  };
 
   const formatFecha = (fecha: string | null) => {
     if (!fecha) return 'No asignada';
@@ -297,7 +280,6 @@ export default function HistorialAsignaciones() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-semibold text-lg">{orden.numero_orden}</p>
                             {getEstadoBadge(orden.estado)}
-                            {getPrioridadBadge(orden.prioridad)}
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                             <div>

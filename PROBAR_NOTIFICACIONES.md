@@ -136,3 +136,4 @@ Con las políticas RLS correctamente configuradas, las notificaciones deberían 
 
 ¡Prueba el sistema y cuéntame cómo va!
 
+

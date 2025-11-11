@@ -52,3 +52,4 @@ ORDER BY cmd, policyname;
 -- LISTO! Ahora las notificaciones deberían funcionar correctamente
 -- ============================================================
 
+

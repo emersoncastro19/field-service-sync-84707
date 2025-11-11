@@ -181,3 +181,4 @@ Si después de seguir estos pasos las notificaciones siguen sin insertarse, veri
 - Que los `id_usuario` del cliente y técnico sean correctos
 - Que la conexión a Supabase esté funcionando correctamente
 
+

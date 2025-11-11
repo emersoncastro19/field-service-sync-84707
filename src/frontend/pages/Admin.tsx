@@ -8,7 +8,6 @@ import { supabase } from "@/backend/config/supabaseClient";
 import { useAuth } from "@/frontend/context/AuthContext";
 import { useToast } from "@/frontend/context/ToastContext";
 import { Card } from "@/frontend/components/ui/card";
-import SupabaseUsageMonitor from "@/frontend/components/SupabaseUsageMonitor";
 
 export default function Admin() {
   const { usuario } = useAuth();
@@ -76,9 +75,9 @@ export default function Admin() {
     <Layout role="admin">
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Administración del Sistema</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Panel de Control</h1>
           <p className="text-muted-foreground">
-            Bienvenido, {usuario?.nombre_completo} - Panel de control administrativo
+            Bienvenido, {usuario?.nombre_completo}
           </p>
         </div>
 
@@ -169,9 +168,6 @@ export default function Admin() {
             </div>
           </DashboardCard>
         </div>
-
-        {/* Monitor de Uso de Supabase */}
-        <SupabaseUsageMonitor />
 
         {/* Auditoría */}
         <DashboardCard

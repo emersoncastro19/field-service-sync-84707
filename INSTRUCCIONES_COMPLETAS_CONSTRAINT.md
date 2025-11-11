@@ -154,3 +154,4 @@ Después de ejecutar el script, el constraint permitirá:
 
 Esto debería resolver el error y permitir que el sistema funcione correctamente.
 
+

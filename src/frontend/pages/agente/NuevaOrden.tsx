@@ -75,36 +75,19 @@ export default function NuevaOrden() {
                 />
               </div>
 
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="priority">Prioridad</Label>
-                  <Select>
-                    <SelectTrigger id="priority">
-                      <SelectValue placeholder="Selecciona" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="baja">Baja</SelectItem>
-                      <SelectItem value="media">Media</SelectItem>
-                      <SelectItem value="alta">Alta</SelectItem>
-                      <SelectItem value="urgente">Urgente</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="zone">Zona</Label>
-                  <Select>
-                    <SelectTrigger id="zone">
-                      <SelectValue placeholder="Selecciona" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="norte">Zona Norte</SelectItem>
-                      <SelectItem value="sur">Zona Sur</SelectItem>
-                      <SelectItem value="este">Zona Este</SelectItem>
-                      <SelectItem value="oeste">Zona Oeste</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="zone">Zona</Label>
+                <Select>
+                  <SelectTrigger id="zone">
+                    <SelectValue placeholder="Selecciona" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="norte">Zona Norte</SelectItem>
+                    <SelectItem value="sur">Zona Sur</SelectItem>
+                    <SelectItem value="este">Zona Este</SelectItem>
+                    <SelectItem value="oeste">Zona Oeste</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">

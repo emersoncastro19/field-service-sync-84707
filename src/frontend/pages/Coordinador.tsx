@@ -45,14 +45,45 @@ export default function Coordinador() {
   }, [usuario, success]);
 
   useEffect(() => {
-    cargarEstadisticas();
-  }, []);
+    if (usuario) {
+      cargarEstadisticas();
+    }
+  }, [usuario]);
 
   const cargarEstadisticas = async () => {
+    if (!usuario) return;
+
     try {
       setCargando(true);
 
-      // Cargar técnicos activos
+      // 1. Obtener el ID del coordinador logueado
+      const idUsuario = typeof usuario.id_usuario === 'string' 
+        ? parseInt(usuario.id_usuario, 10) 
+        : usuario.id_usuario;
+
+      const { data: coordinadorData, error: coordinadorError } = await supabase
+        .from('coordinadores_campo')
+        .select('id_coordinador')
+        .eq('id_usuario', idUsuario)
+        .maybeSingle();
+
+      if (coordinadorError) throw coordinadorError;
+
+      if (!coordinadorData || !coordinadorData.id_coordinador) {
+        console.warn('⚠️ No se encontró id_coordinador para el coordinador logueado');
+        setTecnicos([]);
+        setEstadisticas({
+          tecnicosActivos: 0,
+          serviciosEnCurso: 0,
+          impedimentos: 0,
+          eficiencia: 0
+        });
+        return;
+      }
+
+      const idCoordinador = coordinadorData.id_coordinador;
+
+      // 2. Cargar técnicos asignados a este coordinador (por id_coordinador_supervisor)
       const { data: tecnicosData, error: tecnicosError } = await supabase
         .from('tecnicos')
         .select(`
@@ -62,47 +93,61 @@ export default function Coordinador() {
             nombre_completo
           )
         `)
-        .eq('disponibilidad', 'Activo');
+        .eq('disponibilidad', 'Activo')
+        .eq('id_coordinador_supervisor', idCoordinador);
 
       if (tecnicosError) throw tecnicosError;
 
       const tecnicosActivos = tecnicosData?.length || 0;
 
-      // Cargar órdenes en curso (Asignada, En Proceso)
-      const { data: ordenesEnCurso, error: ordenesError } = await supabase
-        .from('ordenes_servicio')
-        .select('id_orden')
-        .in('estado', ['Asignada', 'En Proceso']);
+      // 3. Cargar órdenes en curso de los técnicos asignados a este coordinador
+      const tecnicosIds = (tecnicosData || []).map(t => t.id_tecnico);
+      let serviciosEnCurso = 0;
+      let ordenesCompletadas = 0;
 
-      if (ordenesError) throw ordenesError;
+      if (tecnicosIds.length > 0) {
+        // Órdenes en curso
+        const { data: ordenesEnCurso, error: ordenesError } = await supabase
+          .from('ordenes_servicio')
+          .select('id_orden')
+          .in('id_tecnico_asignado', tecnicosIds)
+          .in('estado', ['Asignada', 'En Proceso']);
 
-      const serviciosEnCurso = ordenesEnCurso?.length || 0;
+        if (ordenesError) throw ordenesError;
+        serviciosEnCurso = ordenesEnCurso?.length || 0;
 
-      // Cargar impedimentos
-      const { data: impedimentosData, error: impedimentosError } = await supabase
-        .from('impedimentos')
-        .select('id_impedimento')
-        .eq('estado', 'Pendiente');
+        // Órdenes completadas
+        const { data: ordenesCompletadasData, error: completadasError } = await supabase
+          .from('ordenes_servicio')
+          .select('id_orden')
+          .in('id_tecnico_asignado', tecnicosIds)
+          .eq('estado', 'Completada');
 
-      if (impedimentosError && impedimentosError.code !== 'PGRST116') {
-        console.error('Error cargando impedimentos:', impedimentosError);
+        if (completadasError) throw completadasError;
+        ordenesCompletadas = ordenesCompletadasData?.length || 0;
       }
 
-      const impedimentos = impedimentosData?.length || 0;
+      // 4. Cargar impedimentos de los técnicos asignados a este coordinador
+      let impedimentos = 0;
+      if (tecnicosIds.length > 0) {
+        const { data: impedimentosData, error: impedimentosError } = await supabase
+          .from('impedimentos')
+          .select('id_impedimento')
+          .in('id_tecnico', tecnicosIds)
+          .eq('estado', 'Pendiente');
 
-      // Calcular eficiencia (órdenes completadas / total de órdenes asignadas)
-      const { data: ordenesCompletadas, error: completadasError } = await supabase
-        .from('ordenes_servicio')
-        .select('id_orden')
-        .eq('estado', 'Completada');
+        if (impedimentosError && impedimentosError.code !== 'PGRST116') {
+          console.error('Error cargando impedimentos:', impedimentosError);
+        } else {
+          impedimentos = impedimentosData?.length || 0;
+        }
+      }
 
-      if (completadasError) throw completadasError;
+      // 5. Calcular eficiencia (órdenes completadas / total de órdenes asignadas)
+      const totalAsignadas = serviciosEnCurso + ordenesCompletadas;
+      const eficiencia = totalAsignadas > 0 ? Math.round((ordenesCompletadas / totalAsignadas) * 100) : 0;
 
-      const totalCompletadas = ordenesCompletadas?.length || 0;
-      const totalAsignadas = serviciosEnCurso + totalCompletadas;
-      const eficiencia = totalAsignadas > 0 ? Math.round((totalCompletadas / totalAsignadas) * 100) : 0;
-
-      // Cargar técnicos con sus órdenes activas para mostrar en la lista
+      // 6. Cargar técnicos con sus órdenes activas para mostrar en la lista
       const tecnicosConOrdenes = await Promise.all(
         (tecnicosData || []).map(async (tecnico: any) => {
           const { data: ordenesTecnico } = await supabase
@@ -139,8 +184,10 @@ export default function Coordinador() {
     <Layout role="coordinator">
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Panel del Coordinador de Campo</h1>
-          <p className="text-muted-foreground">Supervisa y coordina los servicios técnicos</p>
+          <h1 className="text-3xl font-bold tracking-tight">Panel de Control</h1>
+          <p className="text-muted-foreground">
+            Bienvenido, {usuario?.nombre_completo}
+          </p>
         </div>
 
         {cargando ? (

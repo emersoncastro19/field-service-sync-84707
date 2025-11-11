@@ -150,3 +150,4 @@ Estas políticas son **permisivas** y son adecuadas para desarrollo. Permiten qu
 
 Después de ejecutar el script, las notificaciones deberían funcionar correctamente. Si aún hay problemas, revisa los logs de la consola del navegador para identificar el error exacto.
 
+

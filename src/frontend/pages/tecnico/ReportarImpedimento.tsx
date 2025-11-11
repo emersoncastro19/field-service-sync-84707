@@ -58,20 +58,6 @@ export default function ReportarImpedimento() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="priority">Prioridad</Label>
-                <Select>
-                  <SelectTrigger id="priority">
-                    <SelectValue placeholder="Selecciona la prioridad" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="baja">Baja - Puede esperar</SelectItem>
-                    <SelectItem value="media">Media - Resolver pronto</SelectItem>
-                    <SelectItem value="alta">Alta - Urgente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
                 <Label htmlFor="description">Descripción del Problema</Label>
                 <Textarea
                   id="description"

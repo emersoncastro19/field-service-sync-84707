@@ -52,3 +52,4 @@ AND conname = 'ejecuciones_servicio_estado_resultado_check';
 -- CHECK (estado_resultado IS NULL OR estado_resultado = 'Pendiente' OR ...)
 -- ============================================================
 
+

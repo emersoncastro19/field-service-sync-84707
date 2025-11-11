@@ -74,3 +74,4 @@ CHECK (
 -- Esto es más flexible y permite que el estado se establezca cuando se finaliza el trabajo
 -- ============================================================
 
+

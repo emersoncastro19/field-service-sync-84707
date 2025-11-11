@@ -24,7 +24,7 @@ const menuItems = {
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   agent: [
-    { icon: Home, label: "Órdenes Recientes", path: "/agente" },
+    { icon: Home, label: "Panel de Control", path: "/agente" },
     { icon: Users, label: "Buscar Clientes", path: "/agente/buscar" },
     { icon: Plus, label: "Crear Nueva Orden", path: "/agente/nueva-orden" },
     { icon: ShieldCheck, label: "Validar Órdenes", path: "/agente/validar-ordenes" },
@@ -32,15 +32,15 @@ const menuItems = {
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   coordinator: [
-    { icon: Home, label: "Panel del Coordinador", path: "/coordinador" },
+    { icon: Home, label: "Panel de Control", path: "/coordinador" },
     { icon: Calendar, label: "Gestionar Citas de Servicio", path: "/coordinador/citas" },
-    { icon: MapPin, label: "Asignar o Reasignar Órdenes", path: "/coordinador/asignar" },
+    { icon: MapPin, label: "Asignar Órdenes", path: "/coordinador/asignar" },
     { icon: History, label: "Historial de Asignaciones", path: "/coordinador/historial" },
     { icon: BarChart3, label: "Reportes", path: "/reportes" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   technician: [
-    { icon: Home, label: "Panel del Técnico", path: "/tecnico" },
+    { icon: Home, label: "Panel de Control", path: "/tecnico" },
     { icon: FileText, label: "Órdenes Asignadas", path: "/tecnico/ordenes" },
     { icon: Calendar, label: "Mis Citas", path: "/tecnico/citas" },
     { icon: Wrench, label: "Gestionar Ejecución de Servicio", path: "/tecnico/gestionar-ejecucion", subItems: [
@@ -52,7 +52,7 @@ const menuItems = {
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   admin: [
-    { icon: Home, label: "Administración", path: "/admin" },
+    { icon: Home, label: "Panel de Control", path: "/admin" },
     { icon: Users, label: "Gestión de Usuarios", path: "/admin/usuarios" },
     { icon: Bell, label: "Motor de Notificaciones", path: "/admin/notificaciones" },
     { icon: Settings, label: "Herramientas", path: "/herramientas" },

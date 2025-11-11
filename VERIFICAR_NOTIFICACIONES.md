@@ -206,3 +206,4 @@ Si ves errores de permisos (código `PGRST116` o mensajes sobre permisos):
 - El componente `NotificationBell` está en `src/frontend/components/NotificationBell.tsx`
 - Las notificaciones se insertan desde `src/frontend/pages/coordinador/AsignarOrdenes.tsx`
 
+

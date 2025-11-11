@@ -92,3 +92,4 @@ SELECT * FROM ejecuciones_servicio ORDER BY fecha_inicio DESC LIMIT 1;
 -- DELETE FROM ejecuciones_servicio WHERE id_ejecucion = [id de la ejecución insertada];
 */
 
+

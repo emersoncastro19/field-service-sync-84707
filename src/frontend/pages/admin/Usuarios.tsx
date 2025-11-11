@@ -62,6 +62,16 @@ export default function Usuarios() {
   const [nuevaContraseña, setNuevaContraseña] = useState("");
   const [cambiarContraseña, setCambiarContraseña] = useState(false);
   const [mostrarNuevaContraseña, setMostrarNuevaContraseña] = useState(false);
+  const [zonaEdicion, setZonaEdicion] = useState(""); // Zona para edición de técnicos/coordinadores
+
+  // Zonas disponibles
+  const zonasDisponibles = [
+    'Zona Norte',
+    'Zona Sur',
+    'Zona Este',
+    'Zona Oeste',
+    'Zona Centro'
+  ];
 
   const [nuevoUsuario, setNuevoUsuario] = useState({
     username: '',
@@ -69,7 +79,8 @@ export default function Usuarios() {
     telefono: '',
     nombre_completo: '',
     tipo_usuario: 'Agente' as 'Agente' | 'Tecnico' | 'Coordinador',
-    contraseña_temp: ''
+    contraseña_temp: '',
+    zona: '' // Zona para técnicos y coordinadores
   });
 
   const [mostrarContraseña, setMostrarContraseña] = useState(false);
@@ -134,6 +145,12 @@ export default function Usuarios() {
       return;
     }
 
+    // Validar zona para técnicos y coordinadores
+    if ((nuevoUsuario.tipo_usuario === 'Tecnico' || nuevoUsuario.tipo_usuario === 'Coordinador') && !nuevoUsuario.zona) {
+      error('Zona requerida', `Debes seleccionar una zona para el ${nuevoUsuario.tipo_usuario === 'Tecnico' ? 'técnico' : 'coordinador'}`);
+      return;
+    }
+
     setCreando(true);
     try {
       // Encriptar contraseña
@@ -169,18 +186,31 @@ export default function Usuarios() {
       if (nuevoUsuario.tipo_usuario === 'Agente') {
         await supabase.from('agentes_servicio').insert([{ id_usuario: usuarioCreado.id_usuario }]);
       } else if (nuevoUsuario.tipo_usuario === 'Tecnico') {
+        // Buscar el coordinador que tiene la misma zona para asignarlo al técnico
+        let idCoordinadorSupervisor = null;
+        if (nuevoUsuario.zona) {
+          const { data: coordinadorData } = await supabase
+            .from('coordinadores_campo')
+            .select('id_coordinador')
+            .eq('zona_responsabilidad', nuevoUsuario.zona)
+            .maybeSingle();
+          
+          idCoordinadorSupervisor = coordinadorData?.id_coordinador || null;
+        }
+
         await supabase.from('tecnicos').insert([
           {
             id_usuario: usuarioCreado.id_usuario,
-            zona_cobertura: 'Por asignar',
-            disponibilidad: 'Activo'
+            zona_cobertura: nuevoUsuario.zona,
+            disponibilidad: 'Activo',
+            id_coordinador_supervisor: idCoordinadorSupervisor
           }
         ]);
       } else if (nuevoUsuario.tipo_usuario === 'Coordinador') {
         await supabase.from('coordinadores_campo').insert([
           {
             id_usuario: usuarioCreado.id_usuario,
-            zona_responsabilidad: 'Por asignar'
+            zona_responsabilidad: nuevoUsuario.zona
           }
         ]);
       }
@@ -244,7 +274,8 @@ export default function Usuarios() {
         telefono: '',
         nombre_completo: '',
         tipo_usuario: 'Agente',
-        contraseña_temp: ''
+        contraseña_temp: '',
+        zona: ''
       });
       setMostrarContraseña(false);
 
@@ -308,6 +339,27 @@ export default function Usuarios() {
         estado: usuarioCompleto.estado || 'Activo'
       });
 
+      // Cargar zona si es técnico o coordinador
+      if (usuarioCompleto.tipo_usuario === 'Tecnico') {
+        const { data: tecnicoData } = await supabase
+          .from('tecnicos')
+          .select('zona_cobertura')
+          .eq('id_usuario', user.id_usuario)
+          .maybeSingle();
+        
+        setZonaEdicion(tecnicoData?.zona_cobertura || '');
+      } else if (usuarioCompleto.tipo_usuario === 'Coordinador') {
+        const { data: coordinadorData } = await supabase
+          .from('coordinadores_campo')
+          .select('zona_responsabilidad')
+          .eq('id_usuario', user.id_usuario)
+          .maybeSingle();
+        
+        setZonaEdicion(coordinadorData?.zona_responsabilidad || '');
+      } else {
+        setZonaEdicion('');
+      }
+
       // Limpiar campos de contraseña
       setNuevaContraseña("");
       setCambiarContraseña(false);
@@ -332,6 +384,12 @@ export default function Usuarios() {
     // Validar contraseña si se está cambiando
     if (cambiarContraseña && nuevaContraseña.trim().length < 6) {
       error('Contraseña inválida', 'La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    // Validar zona para técnicos y coordinadores
+    if ((usuarioEditando.tipo_usuario === 'Tecnico' || usuarioEditando.tipo_usuario === 'Coordinador') && !zonaEdicion) {
+      error('Zona requerida', `Debes seleccionar una zona para el ${usuarioEditando.tipo_usuario === 'Tecnico' ? 'técnico' : 'coordinador'}`);
       return;
     }
 
@@ -362,10 +420,47 @@ export default function Usuarios() {
 
       if (updateError) throw updateError;
 
+      // Actualizar zona si es técnico o coordinador
+      if (usuarioEditando.tipo_usuario === 'Tecnico' && zonaEdicion) {
+        // Buscar el coordinador que tiene la misma zona para asignarlo al técnico
+        let idCoordinadorSupervisor = null;
+        const { data: coordinadorData } = await supabase
+          .from('coordinadores_campo')
+          .select('id_coordinador')
+          .eq('zona_responsabilidad', zonaEdicion)
+          .maybeSingle();
+        
+        idCoordinadorSupervisor = coordinadorData?.id_coordinador || null;
+
+        const { error: tecnicoError } = await supabase
+          .from('tecnicos')
+          .update({ 
+            zona_cobertura: zonaEdicion,
+            id_coordinador_supervisor: idCoordinadorSupervisor
+          })
+          .eq('id_usuario', usuarioEditando.id_usuario);
+        
+        if (tecnicoError) throw tecnicoError;
+      } else if (usuarioEditando.tipo_usuario === 'Coordinador' && zonaEdicion) {
+        const { error: coordinadorError } = await supabase
+          .from('coordinadores_campo')
+          .update({ zona_responsabilidad: zonaEdicion })
+          .eq('id_usuario', usuarioEditando.id_usuario);
+        
+        if (coordinadorError) throw coordinadorError;
+
+        // Si el coordinador cambia de zona, actualizar los técnicos de su zona anterior
+        // y asignar los técnicos de la nueva zona a este coordinador
+        // (Opcional: esto se puede hacer manualmente o con un trigger en la BD)
+      }
+
       // Log de auditoría
       let descripcionLog = `Editó información del usuario ${usuarioEditando.email}`;
       if (cambiarContraseña) {
         descripcionLog += ' y cambió la contraseña';
+      }
+      if (zonaEdicion && (usuarioEditando.tipo_usuario === 'Tecnico' || usuarioEditando.tipo_usuario === 'Coordinador')) {
+        descripcionLog += ` y actualizó la zona a ${zonaEdicion}`;
       }
 
       await supabase.from('logs_auditoria').insert([
@@ -384,6 +479,7 @@ export default function Usuarios() {
       setNuevaContraseña("");
       setCambiarContraseña(false);
       setMostrarNuevaContraseña(false);
+      setZonaEdicion("");
 
     } catch (err: any) {
       console.error('Error actualizando usuario:', err);
@@ -454,7 +550,7 @@ export default function Usuarios() {
                   <Select
                     value={nuevoUsuario.tipo_usuario}
                     onValueChange={(value: 'Agente' | 'Tecnico' | 'Coordinador') =>
-                      setNuevoUsuario({ ...nuevoUsuario, tipo_usuario: value, contraseña_temp: '' })
+                      setNuevoUsuario({ ...nuevoUsuario, tipo_usuario: value, contraseña_temp: '', zona: '' })
                     }
                   >
                     <SelectTrigger id="tipo_usuario">
@@ -467,6 +563,37 @@ export default function Usuarios() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Zona (solo para Técnicos y Coordinadores) */}
+                {(nuevoUsuario.tipo_usuario === 'Tecnico' || nuevoUsuario.tipo_usuario === 'Coordinador') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="zona">
+                      {nuevoUsuario.tipo_usuario === 'Tecnico' ? 'Zona de Cobertura' : 'Zona de Responsabilidad'} *
+                    </Label>
+                    <Select
+                      value={nuevoUsuario.zona}
+                      onValueChange={(value) =>
+                        setNuevoUsuario({ ...nuevoUsuario, zona: value })
+                      }
+                    >
+                      <SelectTrigger id="zona">
+                        <SelectValue placeholder="Selecciona una zona" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {zonasDisponibles.map((zona) => (
+                          <SelectItem key={zona} value={zona}>
+                            {zona}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {nuevoUsuario.tipo_usuario === 'Tecnico' 
+                        ? 'Zona geográfica donde el técnico presta servicios'
+                        : 'Zona geográfica de la cual el coordinador es responsable'}
+                    </p>
+                  </div>
+                )}
 
                 {/* Campos Básicos */}
                 <div className="grid gap-4 md:grid-cols-2">
@@ -576,7 +703,8 @@ export default function Usuarios() {
                       telefono: '',
                       nombre_completo: '',
                       tipo_usuario: 'Agente',
-                      contraseña_temp: ''
+                      contraseña_temp: '',
+                      zona: ''
                     });
                     setMostrarContraseña(false);
                   }}
@@ -747,9 +875,13 @@ export default function Usuarios() {
                   <Label htmlFor="edit_tipo_usuario">Tipo de Usuario *</Label>
                   <Select
                     value={usuarioEditando.tipo_usuario}
-                    onValueChange={(value: string) => 
-                      setUsuarioEditando({ ...usuarioEditando, tipo_usuario: value as any })
-                    }
+                    onValueChange={(value: string) => {
+                      setUsuarioEditando({ ...usuarioEditando, tipo_usuario: value as any });
+                      // Si cambia el tipo y no es técnico/coordinador, limpiar zona
+                      if (value !== 'Tecnico' && value !== 'Coordinador') {
+                        setZonaEdicion('');
+                      }
+                    }}
                   >
                     <SelectTrigger id="edit_tipo_usuario">
                       <SelectValue />
@@ -763,6 +895,35 @@ export default function Usuarios() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Zona (solo para Técnicos y Coordinadores en edición) */}
+                {(usuarioEditando.tipo_usuario === 'Tecnico' || usuarioEditando.tipo_usuario === 'Coordinador') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_zona">
+                      {usuarioEditando.tipo_usuario === 'Tecnico' ? 'Zona de Cobertura' : 'Zona de Responsabilidad'} *
+                    </Label>
+                    <Select
+                      value={zonaEdicion}
+                      onValueChange={(value) => setZonaEdicion(value)}
+                    >
+                      <SelectTrigger id="edit_zona">
+                        <SelectValue placeholder="Selecciona una zona" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {zonasDisponibles.map((zona) => (
+                          <SelectItem key={zona} value={zona}>
+                            {zona}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {usuarioEditando.tipo_usuario === 'Tecnico' 
+                        ? 'Zona geográfica donde el técnico presta servicios'
+                        : 'Zona geográfica de la cual el coordinador es responsable'}
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label>Estado</Label>
@@ -837,6 +998,7 @@ export default function Usuarios() {
                   setNuevaContraseña("");
                   setCambiarContraseña(false);
                   setMostrarNuevaContraseña(false);
+                  setZonaEdicion("");
                 }}
                 disabled={editando || cargandoUsuario}
               >

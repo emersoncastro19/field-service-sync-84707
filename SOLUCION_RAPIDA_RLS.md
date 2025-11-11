@@ -117,3 +117,4 @@ Si después de ejecutar el script las notificaciones **aún no se insertan**, el
 
 En todos los casos, los logs detallados en la consola te ayudarán a identificar el problema exacto.
 
+

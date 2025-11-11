@@ -161,3 +161,4 @@ WHERE table_name = 'notificaciones';
 5. `VERIFICAR_RLS_NOTIFICACIONES.md` (nuevo)
 6. `RESUMEN_CAMBIOS_NOTIFICACIONES.md` (este archivo, nuevo)
 
+

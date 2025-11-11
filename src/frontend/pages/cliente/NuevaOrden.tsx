@@ -34,8 +34,7 @@ export default function NuevaOrden() {
     tipo_servicio: "",
     descripcion_solicitud: "",
     direccion_servicio: "",
-    referencias_ubicacion: "",
-    prioridad: "Media"
+    referencias_ubicacion: ""
   });
 
   const [errores, setErrores] = useState<Record<string, string>>({});
@@ -142,7 +141,7 @@ export default function NuevaOrden() {
             id_cliente: clienteData.id_cliente,
             id_agente_creador: null, // NULL cuando es creada por el cliente
             tipo_servicio: formData.tipo_servicio,
-            prioridad: formData.prioridad,
+            prioridad: "Media", // Valor por defecto en la BD (campo interno, no visible en UI)
             descripcion_solicitud: formData.descripcion_solicitud,
             direccion_servicio: formData.direccion_servicio,
             estado: 'Creada',
@@ -260,28 +259,6 @@ export default function NuevaOrden() {
                 {errores.tipo_servicio && (
                   <p className="text-sm text-red-600">{errores.tipo_servicio}</p>
                 )}
-              </div>
-
-              {/* Prioridad */}
-              <div className="space-y-2">
-                <Label htmlFor="prioridad">Prioridad</Label>
-                <Select 
-                  value={formData.prioridad} 
-                  onValueChange={(value) => handleChange('prioridad', value)}
-                >
-                  <SelectTrigger id="prioridad">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Baja">Baja - Puede esperar varios días</SelectItem>
-                    <SelectItem value="Media">Media - Atención en 2-3 días</SelectItem>
-                    <SelectItem value="Alta">Alta - Requiere pronta atención</SelectItem>
-                    <SelectItem value="Crítica">Crítica - Urgente (sin servicio)</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Por defecto se asigna prioridad Media
-                </p>
               </div>
 
               {/* Descripción */}
