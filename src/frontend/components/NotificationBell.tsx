@@ -36,6 +36,7 @@ export default function NotificationBell() {
   const cargarNotificaciones = useCallback(async () => {
     if (!usuario?.id_usuario) {
       console.log('⚠️ No hay usuario, no se pueden cargar notificaciones');
+      setCargando(false);
       return;
     }
 
@@ -44,9 +45,26 @@ export default function NotificationBell() {
         ? parseInt(usuario.id_usuario, 10) 
         : usuario.id_usuario;
 
+      // Verificar que el id_usuario sea válido
+      if (isNaN(idUsuario) || idUsuario <= 0) {
+        console.error('❌ ID de usuario inválido:', usuario.id_usuario);
+        setCargando(false);
+        return;
+      }
+
       console.log('🔔 Cargando notificaciones para usuario:', idUsuario);
+      console.log('🔔 Tipo de id_usuario:', typeof idUsuario);
+
+      // Verificar sesión de Supabase
+      const { data: sessionData } = await supabase.auth.getSession();
+      console.log('🔐 Sesión de Supabase:', sessionData?.session ? 'Activa' : 'Inactiva');
+      
+      if (!sessionData?.session) {
+        console.warn('⚠️ No hay sesión activa de Supabase');
+      }
 
       // Primero obtener las notificaciones básicas
+      console.log('📤 Ejecutando query de notificaciones...');
       const { data: notificacionesData, error } = await supabase
         .from('notificaciones')
         .select('*')
@@ -56,11 +74,25 @@ export default function NotificationBell() {
 
       if (error) {
         console.error('❌ Error en query de notificaciones:', error);
+        console.error('❌ Código del error:', error.code);
+        console.error('❌ Mensaje del error:', error.message);
         console.error('❌ Detalles del error:', JSON.stringify(error, null, 2));
-        throw error;
+        
+        // Si es un error de permisos, informar al usuario
+        if (error.code === 'PGRST116' || error.message?.includes('permission denied') || error.message?.includes('row-level security')) {
+          console.error('🚫 ERROR DE PERMISOS: Las políticas RLS están bloqueando el acceso a las notificaciones');
+          console.error('💡 SOLUCIÓN: Ejecuta el script fix-notificaciones-rls.sql en Supabase para corregir las políticas RLS');
+        }
+        
+        setNotificaciones([]);
+        setNoLeidas(0);
+        return;
       }
 
       console.log('📬 Notificaciones encontradas (sin relaciones):', notificacionesData?.length || 0);
+      if (notificacionesData && notificacionesData.length > 0) {
+        console.log('📬 Primera notificación:', JSON.stringify(notificacionesData[0], null, 2));
+      }
 
       // Si hay notificaciones con id_orden, obtener los números de orden
       const ordenesIds = [...new Set((notificacionesData || [])
