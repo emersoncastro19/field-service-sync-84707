@@ -5,7 +5,7 @@
 ### Paso 1: Abrir PowerShell o Git Bash
 Abre PowerShell o Git Bash en la carpeta del proyecto:
 ```
-C:\PROYECTO ING SOFT II\field-service-sync-84707
+C:\PROYECTO ING SOFT II\field-service-sync-84707r
 ```
 
 ### Paso 2: Ver qué cambios tienes (Opcional)
