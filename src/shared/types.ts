@@ -56,7 +56,7 @@ export interface PasswordRecoveryData {
 }
 
 // Constantes para el sistema
-export const MAX_LOGIN_ATTEMPTS = 5;
+export const MAX_LOGIN_ATTEMPTS = 4; // Total de intentos permitidos
 export const TOAST_DURATION = 5000; // 5 segundos
 export const PASSWORD_MIN_LENGTH = 6;
 export const USERNAME_MIN_LENGTH = 3;

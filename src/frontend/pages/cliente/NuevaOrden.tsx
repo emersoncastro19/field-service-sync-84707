@@ -12,6 +12,7 @@ import { FileText, MapPin, AlertCircle, CheckCircle2, Home } from "lucide-react"
 import { useAuth } from "@/frontend/context/AuthContext";
 import { supabase } from "@/backend/config/supabaseClient";
 import { useToast } from "@/frontend/context/ToastContext";
+import { obtenerFechaActualVenezuelaUTC } from "@/shared/utils/dateUtils";
 
 interface ClienteData {
   id_cliente: number;
@@ -128,11 +129,17 @@ export default function NuevaOrden() {
 
     setCargando(true);
 
+    console.log('🚀 === INICIANDO CREACIÓN DE ORDEN ===');
+    console.log('📋 Datos del formulario:', formData);
+    console.log('👤 Usuario actual:', usuario);
+
     try {
       // Generar número de orden único
       const numeroOrden = generarNumeroOrden();
+      console.log('🔢 Número de orden generado:', numeroOrden);
 
       // Crear la orden de servicio
+      console.log('💾 Insertando orden en la base de datos...');
       const { data, error: insertError } = await supabase
         .from('ordenes_servicio')
         .insert([
@@ -145,7 +152,7 @@ export default function NuevaOrden() {
             descripcion_solicitud: formData.descripcion_solicitud,
             direccion_servicio: formData.direccion_servicio,
             estado: 'Creada',
-            fecha_solicitud: new Date().toISOString()
+            fecha_solicitud: obtenerFechaActualVenezuelaUTC()
           }
         ])
         .select()
@@ -159,6 +166,196 @@ export default function NuevaOrden() {
           .from('clientes')
           .update({ referencias_ubicacion: formData.referencias_ubicacion })
           .eq('id_cliente', clienteData.id_cliente);
+      }
+
+      // Obtener nombre del cliente para la notificación
+      const nombreCliente = usuario?.nombre_completo || 'Cliente';
+
+      // Obtener todos los agentes activos para notificarles
+      console.log('\n🔍 ========== BUSCANDO AGENTES ==========');
+      const session = await supabase.auth.getSession();
+      console.log('📊 Sesión actual de Supabase:', session.data?.session?.user?.id || 'NO HAY SESIÓN');
+      console.log('📊 Usuario autenticado:', usuario?.id_usuario, 'Tipo:', usuario?.tipo_usuario);
+      
+      const { data: agentesData, error: agentesError } = await supabase
+        .from('agentes_servicio')
+        .select('id_usuario');
+      
+      console.log('🔍 Resultado de la consulta de agentes:');
+      console.log('   - Datos:', agentesData);
+      console.log('   - Error:', agentesError);
+
+      if (agentesError) {
+        console.error('❌ Error obteniendo agentes:', agentesError);
+        console.error('Detalles del error:', JSON.stringify(agentesError, null, 2));
+      } else {
+        console.log(`✅ Se encontraron ${agentesData?.length || 0} agentes`);
+        if (agentesData && agentesData.length > 0) {
+          console.log('📋 Lista de agentes encontrados:');
+          agentesData.forEach((agente, index) => {
+            console.log(`   ${index + 1}. ID Usuario: ${agente.id_usuario} (tipo: ${typeof agente.id_usuario})`);
+          });
+        } else {
+          console.warn('⚠️ NO SE ENCONTRARON AGENTES EN LA BASE DE DATOS');
+          console.warn('   Esto significa que no hay agentes registrados en la tabla agentes_servicio');
+        }
+      }
+
+      // Crear notificaciones para todos los agentes activos
+      if (agentesData && agentesData.length > 0) {
+        const fechaActual = obtenerFechaActualVenezuelaUTC();
+        console.log('📅 Fecha actual para notificaciones:', fechaActual);
+        
+        // Filtrar agentes que tengan id_usuario válido
+        const agentesValidos = agentesData.filter(agente => {
+          const valido = agente.id_usuario != null;
+          if (!valido) {
+            console.warn('⚠️ Agente sin id_usuario válido:', agente);
+          }
+          return valido;
+        });
+
+        console.log(`✅ ${agentesValidos.length} agentes válidos de ${agentesData.length} encontrados`);
+
+        const notificaciones = agentesValidos.map(agente => {
+          const idDestinatario = typeof agente.id_usuario === 'string' 
+            ? parseInt(agente.id_usuario, 10) 
+            : agente.id_usuario;
+          
+          // Preparar objeto de notificación con el formato exacto esperado
+          const notificacionParaInsertar = {
+            id_orden: data.id_orden,
+            id_destinatario: Number(idDestinatario), // Asegurar que sea número
+            tipo_notificacion: 'Nueva Orden Creada',
+            canal: 'Sistema_Interno',
+            mensaje: `Se ha creado una nueva orden de servicio ${numeroOrden} por el cliente ${nombreCliente}. Tipo: ${formData.tipo_servicio}. Por favor, valida y procesa la orden.`,
+            fecha_enviada: fechaActual,
+            leida: false
+          };
+          
+          console.log('📝 Notificación preparada para agente ID:', idDestinatario);
+          console.log('   Datos:', JSON.stringify(notificacionParaInsertar, null, 2));
+          return notificacionParaInsertar;
+        });
+
+        if (notificaciones.length > 0) {
+          console.log(`📤 Preparando para insertar ${notificaciones.length} notificaciones...`);
+          console.log('   Primera notificación:', JSON.stringify(notificaciones[0], null, 2));
+          
+          // Insertar notificaciones UNA POR UNA para mejor debugging
+          let notificacionesExitosas = 0;
+          let notificacionesFallidas = 0;
+          
+          for (let i = 0; i < notificaciones.length; i++) {
+            const notif = notificaciones[i];
+            console.log(`\n📝 === INSERTANDO NOTIFICACIÓN ${i + 1}/${notificaciones.length} ===`);
+            console.log('   Para agente ID:', notif.id_destinatario);
+            console.log('   Orden ID:', notif.id_orden);
+            console.log('   Tipo:', notif.tipo_notificacion);
+            
+            try {
+              // Verificar que los datos sean correctos antes de insertar
+              console.log('   Verificando datos antes de insertar:');
+              console.log('   - id_destinatario:', notif.id_destinatario, typeof notif.id_destinatario);
+              console.log('   - id_orden:', notif.id_orden, typeof notif.id_orden);
+              console.log('   - tipo_notificacion:', notif.tipo_notificacion);
+              console.log('   - mensaje (primeros 50 chars):', notif.mensaje.substring(0, 50));
+              console.log('   - fecha_enviada:', notif.fecha_enviada);
+              console.log('   - leida:', notif.leida);
+              
+              // Preparar objeto de notificación con validación exhaustiva
+              const notificacionInsertar = {
+                id_orden: notif.id_orden || null,
+                id_destinatario: Number(notif.id_destinatario),
+                tipo_notificacion: String(notif.tipo_notificacion).trim(),
+                canal: String(notif.canal || 'Sistema_Interno').trim(),
+                mensaje: String(notif.mensaje).trim(),
+                fecha_enviada: String(notif.fecha_enviada),
+                leida: Boolean(notif.leida !== undefined ? notif.leida : false)
+              };
+              
+              console.log('   📦 Objeto a insertar:', JSON.stringify(notificacionInsertar, null, 2));
+              
+              const { data: notifData, error: notifError } = await supabase
+                .from('notificaciones')
+                .insert([notificacionInsertar])
+                .select();
+
+              if (notifError) {
+                console.error(`❌ ERROR insertando notificación ${i + 1}:`, {
+                  code: notifError.code,
+                  message: notifError.message,
+                  details: notifError.details,
+                  hint: notifError.hint,
+                  error_completo: JSON.stringify(notifError, null, 2)
+                });
+                
+                // Si es error de permisos RLS, mostrar mensaje específico
+                if (notifError.code === 'PGRST116' || notifError.code === '42501' || 
+                    notifError.code === '42P01' ||
+                    notifError.message?.includes('permission') || 
+                    notifError.message?.includes('RLS') || 
+                    notifError.message?.includes('policy') ||
+                    notifError.message?.includes('new row violates')) {
+                  console.error('🔒 ERROR DE PERMISOS RLS DETECTADO');
+                  console.error('💡 SOLUCIÓN: Verifica las políticas RLS en Supabase para la tabla notificaciones');
+                  console.error('💡 La política debe permitir INSERT para usuarios autenticados');
+                  console.error('💡 Ejemplo de política necesaria:');
+                  console.error('   CREATE POLICY "Permitir insertar notificaciones"');
+                  console.error('   ON notificaciones FOR INSERT');
+                  console.error('   TO authenticated');
+                  console.error('   WITH CHECK (true);');
+                }
+                
+                notificacionesFallidas++;
+              } else {
+                console.log(`✅ Notificación ${i + 1} insertada exitosamente:`, notifData);
+                if (notifData && notifData.length > 0) {
+                  console.log('   ✅ ID de notificación creada:', notifData[0].id_notificacion);
+                  console.log('   ✅ Para destinatario ID:', notifData[0].id_destinatario);
+                  console.log('   ✅ Tipo:', notifData[0].tipo_notificacion);
+                  console.log('   ✅ Mensaje:', notifData[0].mensaje.substring(0, 50) + '...');
+                  
+                  // Verificar que realmente se insertó consultando la BD
+                  const { data: verificacion, error: errorVerificacion } = await supabase
+                    .from('notificaciones')
+                    .select('*')
+                    .eq('id_notificacion', notifData[0].id_notificacion)
+                    .single();
+                  
+                  if (errorVerificacion) {
+                    console.error('   ⚠️ ADVERTENCIA: No se pudo verificar la inserción:', errorVerificacion);
+                  } else {
+                    console.log('   ✅ VERIFICACIÓN: Notificación confirmada en la BD');
+                  }
+                } else {
+                  console.warn('   ⚠️ ADVERTENCIA: La inserción no devolvió datos');
+                }
+                notificacionesExitosas++;
+              }
+            } catch (err: any) {
+              console.error(`❌ EXCEPCIÓN al insertar notificación ${i + 1}:`, err);
+              console.error('   Stack trace:', err.stack);
+              notificacionesFallidas++;
+            }
+          }
+
+          console.log(`\n📊 === RESUMEN DE NOTIFICACIONES ===`);
+          console.log(`✅ Exitosas: ${notificacionesExitosas}`);
+          console.log(`❌ Fallidas: ${notificacionesFallidas}`);
+          
+          if (notificacionesFallidas > 0 && notificacionesExitosas === 0) {
+            console.error('❌ TODAS las notificaciones fallaron. Revisa las políticas RLS en Supabase.');
+          } else if (notificacionesFallidas > 0) {
+            console.warn(`⚠️ Se insertaron ${notificacionesExitosas} notificaciones, pero ${notificacionesFallidas} fallaron`);
+          } else {
+            console.log(`✅ Todas las ${notificacionesExitosas} notificaciones fueron insertadas exitosamente`);
+          }
+        } else {
+          console.warn('⚠️ No se encontraron agentes válidos para notificar después del filtrado');
+        }
+      } else {
+        console.warn('⚠️ No se encontraron agentes en la base de datos');
       }
 
       // Log de auditoría

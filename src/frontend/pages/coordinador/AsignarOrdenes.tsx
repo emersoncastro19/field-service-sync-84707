@@ -25,6 +25,7 @@ import { useAuth } from "@/frontend/context/AuthContext";
 import { useToast } from "@/frontend/context/ToastContext";
 import { Input } from "@/frontend/components/ui/input";
 import { Label } from "@/frontend/components/ui/label";
+import { crearFechaVenezuelaUTC, verificarHoraVenezuela, formatearFechaVenezuela, formatearSoloFechaVenezuela, formatearHoraVenezuela, parsearFechaUTC } from "@/shared/utils/dateUtils";
 
 interface Orden {
   id_orden: number;
@@ -197,34 +198,30 @@ export default function AsignarOrdenes() {
     try {
       const tecnicoId = parseInt(tecnicoSeleccionado);
       
-      // Combinar fecha y hora para crear fecha_programada
-      // PROBLEMA: Cuando se usa new Date() con una cadena de fecha/hora sin zona horaria,
-      // JavaScript la interpreta como hora local, pero .toISOString() la convierte a UTC.
-      // Esto puede cambiar la fecha/hora dependiendo de la zona horaria del usuario.
-      // 
-      // SOLUCIÓN: Crear la fecha usando las partes individuales (año, mes, día, hora, minuto)
-      // en hora local, y luego convertir a ISO. Esto preserva correctamente la hora local
-      // que el usuario seleccionó, convirtiéndola apropiadamente a UTC para almacenamiento.
-      const [year, month, day] = fechaCita.split('-').map(Number);
-      const [hours, minutes] = horaCita.split(':').map(Number);
+      // Combinar fecha y hora para crear fecha_programada usando función helper
+      // Esta función garantiza que la conversión sea correcta sin importar
+      // la zona horaria del navegador del usuario
+      const fechaProgramada = crearFechaVenezuelaUTC(fechaCita, horaCita);
       
-      // Crear Date object en hora local (mes es 0-indexed, por eso month - 1)
-      // Esto crea la fecha exacta que el usuario seleccionó en su zona horaria local
-      const fechaLocal = new Date(year, month - 1, day, hours, minutes, 0, 0);
-      
-      // Convertir a ISO string (UTC). Esta conversión es correcta porque:
-      // - Si el usuario selecciona 10:00 en UTC-4, se guarda como 14:00 UTC
-      // - Cuando se lee y se convierte de vuelta a hora local, se muestra como 10:00 ✓
-      const fechaProgramada = fechaLocal.toISOString();
+      // VERIFICACIÓN: Verificar que la hora sea correcta
+      const horaIngresada = horaCita; // Formato HH:MM
+      const horaCoincide = verificarHoraVenezuela(fechaProgramada, horaIngresada);
       
       console.log('📅 Fecha y hora de cita:', {
-        fechaCita,
-        horaCita,
-        fechaLocal: fechaLocal.toLocaleString('es-VE', { timeZone: 'America/Caracas' }),
+        entrada: `${fechaCita} ${horaCita}`,
         fechaProgramada,
-        zonaHoraria: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        offset: fechaLocal.getTimezoneOffset() / 60
+        horaIngresada,
+        horaCoincide,
+        zonaHorariaNavegador: Intl.DateTimeFormat().resolvedOptions().timeZone
       });
+      
+      // Si no coincide, mostrar error
+      if (!horaCoincide) {
+        console.error('⚠️ ERROR: La hora no coincide!', {
+          ingresada: horaIngresada,
+          fechaProgramada
+        });
+      }
 
       // 0. Obtener el ID del coordinador que está asignando
       const idUsuario = typeof usuario.id_usuario === 'string' 
@@ -263,7 +260,16 @@ export default function AsignarOrdenes() {
 
       if (updateError) throw updateError;
 
-      // 2. Crear la cita
+      // 2. Crear la cita en estado "Programada" para que el cliente la confirme
+      // Usamos "Programada" (10 chars) que está permitido en el constraint CHECK de la BD
+      console.log('📤 INSERTANDO CITA EN SUPABASE:', {
+        id_orden: ordenSeleccionada.id_orden,
+        fecha_programada_STRING: fechaProgramada,
+        fecha_programada_TYPE: typeof fechaProgramada,
+        fecha_programada_ISO: fechaProgramada,
+        estado_cita: 'Programada'
+      });
+      
       const { data: citaData, error: citaError } = await supabase
         .from('citas')
         .insert([
@@ -277,9 +283,19 @@ export default function AsignarOrdenes() {
         .single();
 
       if (citaError) {
-        console.error('Error creando cita:', citaError);
+        console.error('❌ Error creando cita:', citaError);
         throw new Error('No se pudo crear la cita: ' + citaError.message);
       }
+      
+      // DEBUG: Verificar qué devolvió Supabase
+      console.log('✅ CITA CREADA EN SUPABASE:', {
+        citaData,
+        fecha_programada_DEVUELTA: citaData?.fecha_programada,
+        fecha_programada_TYPE: typeof citaData?.fecha_programada,
+        fecha_programada_ISO: citaData?.fecha_programada,
+        fecha_programada_DATE: citaData?.fecha_programada ? parsearFechaUTC(citaData.fecha_programada).toISOString() : null,
+        fecha_programada_VENEZUELA: citaData?.fecha_programada ? formatearHoraVenezuela(citaData.fecha_programada) : null
+      });
 
       // 3. Obtener IDs de usuario del cliente y técnico para notificaciones
       // Obtener ID del cliente directamente de la tabla clientes
@@ -358,7 +374,7 @@ export default function AsignarOrdenes() {
           id_destinatario: idUsuarioCliente,
           tipo_notificacion: 'Cita Programada',
           canal: 'Sistema_Interno',
-          mensaje: `Se ha programado una cita para tu orden ${ordenSeleccionada.numero_orden} el ${new Date(fechaProgramada).toLocaleDateString('es-VE')} a las ${horaCita}`,
+          mensaje: `Se ha programado una cita para tu orden ${ordenSeleccionada.numero_orden} el ${formatearSoloFechaVenezuela(fechaProgramada)} a las ${horaCita}. Por favor, confirma si esta fecha te parece bien o solicita una reprogramación.`,
           fecha_enviada: new Date().toISOString(),
           leida: false
         };
@@ -374,7 +390,7 @@ export default function AsignarOrdenes() {
           id_destinatario: idUsuarioTecnico,
           tipo_notificacion: 'Asignación de Orden',
           canal: 'Sistema_Interno',
-          mensaje: `Se te ha asignado la orden ${ordenSeleccionada.numero_orden}. Cita programada para el ${new Date(fechaProgramada).toLocaleDateString('es-VE')} a las ${horaCita}`,
+          mensaje: `Se te ha asignado la orden ${ordenSeleccionada.numero_orden}. Cita programada para el ${formatearSoloFechaVenezuela(fechaProgramada)} a las ${horaCita}`,
           fecha_enviada: new Date().toISOString(),
           leida: false
         };
@@ -527,12 +543,12 @@ export default function AsignarOrdenes() {
             id_usuario: usuario?.id_usuario,
             id_orden: ordenSeleccionada.id_orden,
             accion: 'ASIGNAR_TECNICO',
-            descripcion: `Coordinador asignó técnico a orden ${ordenSeleccionada.numero_orden} y programó cita para el ${new Date(fechaProgramada).toLocaleDateString('es-VE')}`,
+            descripcion: `Coordinador asignó técnico a orden ${ordenSeleccionada.numero_orden} y programó cita para el ${formatearSoloFechaVenezuela(fechaProgramada)}`,
             timestamp: new Date().toISOString()
           }
         ]);
 
-      success('Técnico asignado y cita programada', `Orden ${ordenSeleccionada.numero_orden} asignada exitosamente. Cita programada para el ${new Date(fechaProgramada).toLocaleDateString('es-VE')} a las ${horaCita}`);
+      success('Técnico asignado y cita programada', `Orden ${ordenSeleccionada.numero_orden} asignada exitosamente. Cita programada para el ${formatearSoloFechaVenezuela(fechaProgramada)} a las ${horaCita}`);
       
       // Recargar datos
       await cargarDatos();
@@ -553,11 +569,7 @@ export default function AsignarOrdenes() {
   };
 
   const formatFecha = (fecha: string) => {
-    return new Date(fecha).toLocaleDateString('es-VE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    return formatearSoloFechaVenezuela(fecha);
   };
 
 

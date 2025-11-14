@@ -45,6 +45,7 @@ import TecnicoDocumentar from "@/frontend/pages/tecnico/Documentar";
 import TecnicoReportarImpedimento from "@/frontend/pages/tecnico/ReportarImpedimento";
 import TecnicoGestionarEjecucion from "@/frontend/pages/tecnico/GestionarEjecucion";
 import TecnicoCitas from "@/frontend/pages/tecnico/Citas";
+import TecnicoOrdenesCompletadas from "@/frontend/pages/tecnico/OrdenesCompletadas";
 
 const queryClient = new QueryClient();
 
@@ -89,6 +90,7 @@ const App = () => (
             <Route path="/tecnico/reportar-impedimento" element={<TecnicoReportarImpedimento />} />
             <Route path="/tecnico/gestionar-ejecucion" element={<TecnicoGestionarEjecucion />} />
             <Route path="/tecnico/citas" element={<TecnicoCitas />} />
+            <Route path="/tecnico/ordenes-completadas" element={<TecnicoOrdenesCompletadas />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/usuarios" element={<Usuarios />} />
             <Route path="/admin/roles" element={<Roles />} />

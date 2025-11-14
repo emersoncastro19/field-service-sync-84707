@@ -14,6 +14,7 @@ import {
 import { supabase } from "@/backend/config/supabaseClient";
 import { useAuth } from "@/frontend/context/AuthContext";
 import { useToast } from "@/frontend/context/ToastContext";
+import { formatearFechaVenezuela } from "@/shared/utils/dateUtils";
 
 interface OrdenDetalle {
   id_orden: number;
@@ -26,6 +27,7 @@ interface OrdenDetalle {
   fecha_limite: string | null;
   fecha_asignacion: string | null;
   fecha_completada: string | null;
+  motivo_rechazo?: string | null;
   // Relaciones
   tecnico?: {
     nombre_completo: string;
@@ -129,9 +131,34 @@ export default function ClienteDetallesOrden() {
         .eq('id_orden', idOrden)
         .order('id_impedimento', { ascending: false });
 
+      // Obtener motivo de rechazo desde logs_auditoria si la orden está cancelada
+      let motivoRechazo: string | null = null;
+      if (ordenData.estado === 'Cancelada') {
+        const { data: logRechazo } = await supabase
+          .from('logs_auditoria')
+          .select('descripcion')
+          .eq('id_orden', idOrden)
+          .eq('accion', 'RECHAZAR_ORDEN')
+          .order('timestamp', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (logRechazo?.descripcion) {
+          // Extraer el motivo del formato: "Agente rechazó orden XXXX - Motivo: [MOTIVO]"
+          const match = logRechazo.descripcion.match(/Motivo:\s*(.+)/);
+          if (match && match[1]) {
+            motivoRechazo = match[1].trim();
+          } else {
+            // Si no tiene el formato esperado, usar toda la descripción
+            motivoRechazo = logRechazo.descripcion;
+          }
+        }
+      }
+
       // Construir objeto completo
       const ordenCompleta: OrdenDetalle = {
         ...ordenData,
+        motivo_rechazo: motivoRechazo,
         tecnico: ordenData.tecnico ? {
           nombre_completo: ordenData.tecnico.usuario.nombre_completo,
           telefono: ordenData.tecnico.usuario.telefono,
@@ -168,14 +195,53 @@ export default function ClienteDetallesOrden() {
       if (updateError) throw updateError;
 
       // 2. Actualizar estado de la orden a "Completada" (definitivamente)
+      // Ahora también actualizamos fecha_completada cuando el cliente confirma
+      const fechaActual = new Date().toISOString();
       const { error: ordenError } = await supabase
         .from('ordenes_servicio')
-        .update({ estado: 'Completada' })
+        .update({ 
+          estado: 'Completada',
+          fecha_completada: fechaActual
+        })
         .eq('id_orden', orden.id_orden);
 
       if (ordenError) throw ordenError;
 
-      // 3. Obtener IDs para notificaciones
+      // 3. Actualizar TODAS las citas de la orden a "Completada" cuando el cliente confirma
+      // Esto asegura que todas las citas (incluyendo las anteriores por reprogramaciones) se actualicen
+      if (orden.citas && orden.citas.length > 0) {
+        // Actualizar todas las citas a "Completada"
+        for (const cita of orden.citas) {
+          if (cita.id_cita) {
+            // Intentar actualizar a "Completada" primero
+            const { error: citaError1 } = await supabase
+              .from('citas')
+              .update({ estado_cita: 'Completada' })
+              .eq('id_cita', cita.id_cita);
+
+            if (citaError1) {
+              // Si "Completada" falla, intentar con "Confirmada"
+              console.warn(`Error actualizando cita ${cita.id_cita} a "Completada":`, citaError1);
+              
+              const { error: citaError2 } = await supabase
+                .from('citas')
+                .update({ estado_cita: 'Confirmada' })
+                .eq('id_cita', cita.id_cita);
+
+              if (citaError2) {
+                console.warn(`Error actualizando cita ${cita.id_cita} a "Confirmada":`, citaError2);
+                // No lanzamos error, solo registramos la advertencia
+              } else {
+                console.log(`✅ Cita ${cita.id_cita} actualizada a "Confirmada" para orden ${orden.id_orden}`);
+              }
+            } else {
+              console.log(`✅ Cita ${cita.id_cita} actualizada a "Completada" para orden ${orden.id_orden}`);
+            }
+          }
+        }
+      }
+
+      // 4. Obtener IDs para notificaciones
       const { data: ordenData } = await supabase
         .from('ordenes_servicio')
         .select(`
@@ -352,13 +418,8 @@ export default function ClienteDetallesOrden() {
 
   const formatFecha = (fecha: string | null) => {
     if (!fecha) return 'No definida';
-    return new Date(fecha).toLocaleString('es-VE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    // Usar la función de dateUtils que maneja correctamente la zona horaria de Venezuela
+    return formatearFechaVenezuela(fecha);
   };
 
   if (cargando) {
@@ -405,6 +466,22 @@ export default function ClienteDetallesOrden() {
           </div>
           {getEstadoBadge(orden.estado)}
         </div>
+
+        {/* Mostrar motivo de rechazo si la orden está cancelada */}
+        {orden.estado === 'Cancelada' && orden.motivo_rechazo && (
+          <Alert variant="destructive" className="border-2">
+            <AlertTriangle className="h-5 w-5" />
+            <AlertDescription className="space-y-2">
+              <p className="font-semibold text-base">Orden Rechazada</p>
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Motivo del rechazo:</p>
+                <p className="text-sm bg-red-50 p-3 rounded-md border border-red-200">
+                  {orden.motivo_rechazo}
+                </p>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Columna Principal */}

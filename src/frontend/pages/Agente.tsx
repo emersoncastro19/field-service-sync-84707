@@ -104,7 +104,6 @@ export default function Agente() {
       'Asignada': { variant: 'default' as const, label: 'Asignada' },
       'En Proceso': { variant: 'default' as const, label: 'En Proceso' },
       'Completada': { variant: 'default' as const, label: 'Completada' },
-      'Completada (pendiente de confirmación)': { variant: 'default' as const, label: 'Pendiente Confirmación' },
       'Cancelada': { variant: 'destructive' as const, label: 'Cancelada' },
     };
 
@@ -167,7 +166,7 @@ export default function Agente() {
                   <div className="flex items-center gap-2">
                     {getEstadoBadge(orden.estado)}
                     <Button variant="ghost" size="sm" asChild>
-                      <Link to={`/agente/detalles-orden?id=${orden.id_orden}`}>
+                      <Link to="/agente/validar-ordenes">
                         <Eye className="h-4 w-4" />
                       </Link>
                     </Button>

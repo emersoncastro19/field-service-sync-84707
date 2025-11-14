@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/backend/config/supabaseClient";
 import { useAuth } from "@/frontend/context/AuthContext";
 import { useToast } from "@/frontend/context/ToastContext";
+import { formatearFechaVenezuela, formatearHoraVenezuela, formatearSoloFechaVenezuela, parsearFechaUTC } from "@/shared/utils/dateUtils";
 
 interface Cita {
   id_cita: number;
@@ -123,8 +124,106 @@ export default function TecnicoCitas() {
 
       if (citasError) throw citasError;
 
-      // 4. Combinar datos
-      const citasCompletas: Cita[] = citasData.map((cita: any) => {
+      // 4. Verificar citas vencidas y actualizar estado automáticamente
+      const fechaActual = new Date();
+      const citasVencidas: any[] = [];
+      
+      for (const cita of citasData) {
+        // Normalizar la fecha para forzar interpretación como UTC
+        const fechaProgramada = parsearFechaUTC(cita.fecha_programada);
+        const horasDiferencia = (fechaActual.getTime() - fechaProgramada.getTime()) / (1000 * 60 * 60);
+        
+        // Si la cita tiene estado "Programada" y la fecha ya pasó
+        if (cita.estado_cita === 'Programada' && fechaActual > fechaProgramada) {
+          // Si pasó más de 24 horas, marcar como "Vencida"
+          if (horasDiferencia >= 24) {
+            citasVencidas.push({ id_cita: cita.id_cita, nuevoEstado: 'Vencida' });
+          }
+          // Si pasó más de 2 horas pero menos de 24, marcar como "Pendiente de Seguimiento"
+          else if (horasDiferencia >= 2) {
+            citasVencidas.push({ id_cita: cita.id_cita, nuevoEstado: 'Pend Seguimiento' });
+          }
+        }
+      }
+      
+      // Actualizar estados de citas vencidas
+      for (const citaVencida of citasVencidas) {
+        await supabase
+          .from('citas')
+          .update({ estado_cita: citaVencida.nuevoEstado })
+          .eq('id_cita', citaVencida.id_cita);
+        
+        // Si la cita está vencida (más de 24 horas), notificar al coordinador
+        if (citaVencida.nuevoEstado === 'Vencida') {
+          // Obtener información de la orden para notificar al coordinador
+          const citaOriginal = citasData.find((c: any) => c.id_cita === citaVencida.id_cita);
+          if (citaOriginal) {
+            const orden = ordenesData.find((o: any) => o.id_orden === citaOriginal.id_orden);
+            if (orden) {
+              // Obtener el coordinador asignado a la orden
+              const { data: ordenData } = await supabase
+                .from('ordenes_servicio')
+                .select('id_coordinador_supervisor')
+                .eq('id_orden', orden.id_orden)
+                .maybeSingle();
+              
+              if (ordenData?.id_coordinador_supervisor) {
+                const idCoord = typeof ordenData.id_coordinador_supervisor === 'string'
+                  ? parseInt(ordenData.id_coordinador_supervisor, 10)
+                  : ordenData.id_coordinador_supervisor;
+                
+                // Obtener el usuario del coordinador
+                const { data: coordinadorData } = await supabase
+                  .from('coordinadores_campo')
+                  .select('id_usuario')
+                  .eq('id_coordinador', idCoord)
+                  .maybeSingle();
+                
+                if (coordinadorData?.id_usuario) {
+                  const idUsuarioCoord = typeof coordinadorData.id_usuario === 'string'
+                    ? parseInt(coordinadorData.id_usuario, 10)
+                    : coordinadorData.id_usuario;
+                  
+                  // Crear notificación para el coordinador
+                  await supabase
+                    .from('notificaciones')
+                    .insert([
+                      {
+                        id_usuario: idUsuarioCoord,
+                        id_orden: orden.id_orden,
+                        tipo: 'alerta',
+                        titulo: 'Cita Vencida',
+                        mensaje: `La cita de la orden ${orden.numero_orden} está vencida. Por favor, revisa y reprograma si es necesario.`,
+                        fecha_creacion: new Date().toISOString(),
+                        leida: false
+                      }
+                    ]);
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // 5. Recargar citas después de actualizar estados (si se actualizaron)
+      let citasParaProcesar = citasData;
+      if (citasVencidas.length > 0) {
+        const { data: citasActualizadas, error: citasActualizadasError } = await supabase
+          .from('citas')
+          .select('*')
+          .in('id_orden', ordenIds)
+          .order('fecha_programada', { ascending: true });
+        
+        if (citasActualizadasError) {
+          console.warn('Error recargando citas actualizadas:', citasActualizadasError);
+          // Continuamos con los datos originales
+        } else if (citasActualizadas) {
+          citasParaProcesar = citasActualizadas;
+        }
+      }
+
+      // 6. Combinar datos
+      const citasCompletas: Cita[] = citasParaProcesar.map((cita: any) => {
         const orden = ordenesData.find((o: any) => o.id_orden === cita.id_orden);
         return {
           ...cita,
@@ -195,6 +294,51 @@ export default function TecnicoCitas() {
         className: 'bg-red-100 text-red-800 border-red-300',
         icon: XCircle
       },
+      'En Proceso': { 
+        variant: 'default', 
+        className: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+        icon: Wrench
+      },
+      'Vencida': { 
+        variant: 'destructive', 
+        className: 'bg-red-100 text-red-800 border-red-300',
+        icon: AlertCircle
+      },
+      'Pend Seguimiento': { 
+        variant: 'default', 
+        className: 'bg-orange-100 text-orange-800 border-orange-300',
+        icon: AlertCircle
+      },
+      'Pendiente de Seguimiento': { 
+        variant: 'default', 
+        className: 'bg-orange-100 text-orange-800 border-orange-300',
+        icon: AlertCircle
+      }, // Compatibilidad
+      'Propuesta': { 
+        variant: 'secondary', 
+        className: 'bg-gray-100 text-gray-800 border-gray-300',
+        icon: Clock
+      },
+      'Pendiente de Confirmación': { 
+        variant: 'secondary', 
+        className: 'bg-gray-100 text-gray-800 border-gray-300',
+        icon: Clock
+      }, // Compatibilidad
+      'Solic Reprogram': { 
+        variant: 'default', 
+        className: 'bg-orange-100 text-orange-800 border-orange-300',
+        icon: AlertCircle
+      },
+      'Solicitud de Reprogramación': { 
+        variant: 'default', 
+        className: 'bg-orange-100 text-orange-800 border-orange-300',
+        icon: AlertCircle
+      }, // Compatibilidad
+      'Completada': { 
+        variant: 'default', 
+        className: 'bg-green-100 text-green-800 border-green-300',
+        icon: CheckCircle2
+      },
     };
 
     const estilo = estilos[estado] || estilos['Programada'];
@@ -210,28 +354,15 @@ export default function TecnicoCitas() {
 
 
   const formatFecha = (fecha: string) => {
-    return new Date(fecha).toLocaleDateString('es-VE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    return formatearSoloFechaVenezuela(fecha);
   };
 
   const formatFechaCompleta = (fecha: string) => {
-    return new Date(fecha).toLocaleString('es-VE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatearFechaVenezuela(fecha);
   };
 
   const formatHora = (fecha: string) => {
-    return new Date(fecha).toLocaleTimeString('es-VE', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatearHoraVenezuela(fecha);
   };
 
   if (cargando) {
@@ -279,9 +410,16 @@ export default function TecnicoCitas() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todas las citas</SelectItem>
+                    <SelectItem value="Propuesta">Propuestas del Coordinador</SelectItem>
+                    <SelectItem value="Pendiente de Confirmación">Pendientes de Confirmación</SelectItem>
                     <SelectItem value="Programada">Programadas</SelectItem>
                     <SelectItem value="Confirmada">Confirmadas</SelectItem>
                     <SelectItem value="Reprogramada">Reprogramadas</SelectItem>
+                    <SelectItem value="En Proceso">En Proceso</SelectItem>
+                    <SelectItem value="Pend Seguimiento">Pendiente de Seguimiento</SelectItem>
+                    <SelectItem value="Pendiente de Seguimiento">Pendiente de Seguimiento</SelectItem>
+                    <SelectItem value="Vencida">Vencidas</SelectItem>
+                    <SelectItem value="Completada">Completadas</SelectItem>
                     <SelectItem value="Cancelada">Canceladas</SelectItem>
                   </SelectContent>
                 </Select>

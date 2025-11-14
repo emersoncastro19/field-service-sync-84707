@@ -20,6 +20,7 @@ import {
 import { supabase } from "@/backend/config/supabaseClient";
 import { useAuth } from "@/frontend/context/AuthContext";
 import { useToast } from "@/frontend/context/ToastContext";
+import { formatearFechaVenezuela } from "@/shared/utils/dateUtils";
 
 interface Orden {
   id_orden: number;
@@ -51,6 +52,7 @@ export default function ValidarOrdenes() {
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<Orden | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [motivoRechazo, setMotivoRechazo] = useState("");
+  const [esDialogRechazo, setEsDialogRechazo] = useState(false);
 
   useEffect(() => {
     cargarOrdenes();
@@ -120,6 +122,14 @@ export default function ValidarOrdenes() {
   const abrirDialogValidacion = (orden: Orden) => {
     setOrdenSeleccionada(orden);
     setMotivoRechazo("");
+    setEsDialogRechazo(false);
+    setDialogOpen(true);
+  };
+
+  const abrirDialogRechazo = (orden: Orden) => {
+    setOrdenSeleccionada(orden);
+    setMotivoRechazo("");
+    setEsDialogRechazo(true);
     setDialogOpen(true);
   };
 
@@ -177,31 +187,81 @@ export default function ValidarOrdenes() {
         console.error('Error registrando log de validación:', logError);
       }
 
-      // Notificar al coordinador (registro en logs)
-      const { error: notifError } = await supabase
-        .from('logs_auditoria')
-        .insert([
-          {
-            id_usuario: usuario.id_usuario,
-            id_orden: ordenSeleccionada.id_orden,
-            accion: 'NOTIFICAR_COORDINADOR',
-            descripcion: `Orden ${ordenSeleccionada.numero_orden} validada y lista para asignación de técnico`,
-            timestamp: new Date().toISOString()
-          }
-        ]);
+      // Obtener ID del cliente para notificación
+      const { data: clienteData } = await supabase
+        .from('clientes')
+        .select('id_usuario')
+        .eq('id_cliente', ordenSeleccionada.cliente.id_cliente)
+        .single();
 
-      if (notifError) {
-        console.error('Error registrando notificación:', notifError);
+      // Obtener coordinadores para notificación
+      const { data: coordinadoresData } = await supabase
+        .from('coordinadores_campo')
+        .select('id_usuario');
+
+      const fechaActual = new Date().toISOString();
+      const notificaciones = [];
+
+      // Notificar al cliente
+      if (clienteData?.id_usuario) {
+        const idUsuarioCliente = typeof clienteData.id_usuario === 'string' 
+          ? parseInt(clienteData.id_usuario, 10) 
+          : clienteData.id_usuario;
+
+        notificaciones.push({
+          id_orden: ordenSeleccionada.id_orden,
+          id_destinatario: idUsuarioCliente,
+          tipo_notificacion: 'Orden Validada',
+          canal: 'Sistema_Interno',
+          mensaje: `Tu orden ${ordenSeleccionada.numero_orden} ha sido validada y está en proceso de asignación.`,
+          fecha_enviada: fechaActual,
+          leida: false
+        });
       }
 
-      success('Orden validada', `La orden ${ordenSeleccionada.numero_orden} ha sido validada exitosamente. El coordinador ha sido notificado.`);
+      // Notificar a todos los coordinadores
+      if (coordinadoresData && coordinadoresData.length > 0) {
+        coordinadoresData.forEach((coordinador: any) => {
+          if (coordinador.id_usuario) {
+            const idUsuarioCoordinador = typeof coordinador.id_usuario === 'string' 
+              ? parseInt(coordinador.id_usuario, 10) 
+              : coordinador.id_usuario;
+
+            notificaciones.push({
+              id_orden: ordenSeleccionada.id_orden,
+              id_destinatario: idUsuarioCoordinador,
+              tipo_notificacion: 'Orden Validada',
+              canal: 'Sistema_Interno',
+              mensaje: `Nueva orden ${ordenSeleccionada.numero_orden} validada y lista para asignación de técnico.`,
+              fecha_enviada: fechaActual,
+              leida: false
+            });
+          }
+        });
+      }
+
+      // Insertar notificaciones
+      if (notificaciones.length > 0) {
+        const { error: notifError } = await supabase
+          .from('notificaciones')
+          .insert(notificaciones);
+
+        if (notifError) {
+          console.error('Error enviando notificaciones:', notifError);
+        } else {
+          console.log(`✅ ${notificaciones.length} notificaciones enviadas (Cliente y Coordinadores)`);
+        }
+      }
+
+      success('Orden validada', `La orden ${ordenSeleccionada.numero_orden} ha sido validada exitosamente. El cliente y los coordinadores han sido notificados.`);
       
       // Recargar datos
       await cargarOrdenes();
       
-      // Cerrar dialog
+      // Cerrar dialog y limpiar estado
       setDialogOpen(false);
       setOrdenSeleccionada(null);
+      setEsDialogRechazo(false);
 
     } catch (err: any) {
       console.error('Error validando orden:', err);
@@ -212,8 +272,14 @@ export default function ValidarOrdenes() {
   };
 
   const rechazarOrden = async () => {
-    if (!ordenSeleccionada || !usuario || !motivoRechazo.trim()) {
-      error('Error', 'Debes proporcionar un motivo de rechazo');
+    if (!ordenSeleccionada || !usuario) {
+      error('Error', 'No hay orden seleccionada o usuario no autenticado');
+      return;
+    }
+
+    // Validar que el motivo tenga al menos 10 caracteres
+    if (!motivoRechazo.trim() || motivoRechazo.trim().length < 10) {
+      error('Error', 'Debes proporcionar un motivo de rechazo de al menos 10 caracteres');
       return;
     }
 
@@ -229,45 +295,82 @@ export default function ValidarOrdenes() {
 
       if (updateError) throw updateError;
 
-      // Registrar en LOGS_AUDITORIA
-      await supabase
+      // Registrar en LOGS_AUDITORIA con el motivo del rechazo
+      const { error: logError } = await supabase
         .from('logs_auditoria')
         .insert([
           {
             id_usuario: usuario.id_usuario,
             id_orden: ordenSeleccionada.id_orden,
             accion: 'RECHAZAR_ORDEN',
-            descripcion: `Agente rechazó orden ${ordenSeleccionada.numero_orden} - Motivo: ${motivoRechazo}`,
+            descripcion: `Agente rechazó orden ${ordenSeleccionada.numero_orden} - Motivo: ${motivoRechazo.trim()}`,
             timestamp: new Date().toISOString()
           }
         ]);
 
-      success('Orden rechazada', `La orden ${ordenSeleccionada.numero_orden} ha sido rechazada.`);
+      if (logError) {
+        console.error('Error registrando log de rechazo:', logError);
+        // No lanzamos error, solo lo registramos
+      }
+
+      // Obtener ID del cliente para notificación
+      const { data: clienteData } = await supabase
+        .from('clientes')
+        .select('id_usuario')
+        .eq('id_cliente', ordenSeleccionada.cliente.id_cliente)
+        .single();
+
+      // Crear notificación al cliente
+      if (clienteData?.id_usuario) {
+        const idUsuarioCliente = typeof clienteData.id_usuario === 'string' 
+          ? parseInt(clienteData.id_usuario, 10) 
+          : clienteData.id_usuario;
+
+        const fechaActual = new Date().toISOString();
+
+        const { error: notifError } = await supabase
+          .from('notificaciones')
+          .insert([
+            {
+              id_orden: ordenSeleccionada.id_orden,
+              id_destinatario: idUsuarioCliente,
+              tipo_notificacion: 'Orden Rechazada',
+              canal: 'Sistema_Interno',
+              mensaje: `Tu orden ${ordenSeleccionada.numero_orden} ha sido rechazada. Motivo: ${motivoRechazo.trim()}`,
+              fecha_enviada: fechaActual,
+              leida: false
+            }
+          ]);
+
+        if (notifError) {
+          console.error('Error enviando notificación al cliente:', notifError);
+        } else {
+          console.log('✅ Notificación enviada al cliente sobre rechazo de orden');
+        }
+      }
+
+      success('Orden rechazada', `La orden ${ordenSeleccionada.numero_orden} ha sido rechazada. Motivo: ${motivoRechazo.trim()}. El cliente ha sido notificado.`);
       
       // Recargar datos
       await cargarOrdenes();
       
-      // Cerrar dialog
+      // Cerrar dialog y limpiar estado
       setDialogOpen(false);
       setOrdenSeleccionada(null);
       setMotivoRechazo("");
+      setEsDialogRechazo(false);
 
     } catch (err: any) {
       console.error('Error rechazando orden:', err);
-      error('Error', 'No se pudo rechazar la orden');
+      error('Error', err.message || 'No se pudo rechazar la orden');
     } finally {
       setValidando(false);
     }
   };
 
   const formatFecha = (fecha: string) => {
-    return new Date(fecha).toLocaleDateString('es-VE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    // Usar formatearFechaVenezuela para manejar correctamente la zona horaria
+    return formatearFechaVenezuela(fecha);
   };
 
 
@@ -460,11 +563,7 @@ export default function ValidarOrdenes() {
                       </Button>
                       <Button 
                         variant="destructive" 
-                        onClick={() => {
-                          setOrdenSeleccionada(orden);
-                          setMotivoRechazo("");
-                          setDialogOpen(true);
-                        }}
+                        onClick={() => abrirDialogRechazo(orden)}
                       >
                         <XCircle className="h-4 w-4 mr-2" />
                         Rechazar
@@ -486,49 +585,95 @@ export default function ValidarOrdenes() {
         )}
 
         {/* Dialog de Validación/Rechazo */}
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) {
+            setOrdenSeleccionada(null);
+            setMotivoRechazo("");
+            setEsDialogRechazo(false);
+          }
+        }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {ordenSeleccionada && ordenSeleccionada.cliente.estado_cuenta === 'Activo' && 
-                 ordenSeleccionada.descripcion_solicitud.trim().length >= 20
-                  ? 'Validar Orden' 
-                  : 'Rechazar Orden'}
+                {esDialogRechazo ? 'Rechazar Orden' : 'Validar Orden'}
               </DialogTitle>
               <DialogDescription>
-                {ordenSeleccionada && ordenSeleccionada.cliente.estado_cuenta === 'Activo' && 
-                 ordenSeleccionada.descripcion_solicitud.trim().length >= 20
-                  ? `¿Estás seguro de que deseas validar la orden ${ordenSeleccionada?.numero_orden}? Esta acción notificará al coordinador.`
-                  : `¿Estás seguro de que deseas rechazar la orden ${ordenSeleccionada?.numero_orden}? Debes proporcionar un motivo.`}
+                {esDialogRechazo 
+                  ? `¿Estás seguro de que deseas rechazar la orden ${ordenSeleccionada?.numero_orden}? Debes proporcionar un motivo.`
+                  : `¿Estás seguro de que deseas validar la orden ${ordenSeleccionada?.numero_orden}? Esta acción notificará al coordinador.`}
               </DialogDescription>
             </DialogHeader>
-            {ordenSeleccionada && (!ordenSeleccionada.cliente.estado_cuenta || ordenSeleccionada.cliente.estado_cuenta !== 'Activo' || ordenSeleccionada.descripcion_solicitud.trim().length < 20) && (
+            
+            {/* Campo de motivo de rechazo - Siempre visible cuando es rechazo */}
+            {esDialogRechazo && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Motivo del Rechazo *</label>
+                <label htmlFor="motivo-rechazo" className="text-sm font-medium">
+                  Motivo del Rechazo *
+                </label>
                 <Textarea
+                  id="motivo-rechazo"
                   className="w-full min-h-[100px]"
-                  placeholder="Describe el motivo por el cual se rechaza esta orden..."
+                  placeholder="Describe el motivo por el cual se rechaza esta orden (mínimo 10 caracteres)..."
                   value={motivoRechazo}
                   onChange={(e) => setMotivoRechazo(e.target.value)}
                 />
+                {motivoRechazo.trim().length > 0 && motivoRechazo.trim().length < 10 && (
+                  <p className="text-xs text-red-600">
+                    El motivo debe tener al menos 10 caracteres
+                  </p>
+                )}
               </div>
             )}
+            
+            {/* Información de advertencia si no cumple condiciones para validar */}
+            {!esDialogRechazo && ordenSeleccionada && (
+              ordenSeleccionada.cliente.estado_cuenta !== 'Activo' || 
+              ordenSeleccionada.descripcion_solicitud.trim().length < 20
+            ) && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Esta orden no cumple las condiciones para ser validada. 
+                  {ordenSeleccionada.cliente.estado_cuenta !== 'Activo' && ' El cliente no está activo.'}
+                  {ordenSeleccionada.descripcion_solicitud.trim().length < 20 && ' La descripción es muy corta.'}
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <DialogFooter>
-              <Button variant="outline" onClick={() => {
-                setDialogOpen(false);
-                setOrdenSeleccionada(null);
-                setMotivoRechazo("");
-              }}>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setDialogOpen(false);
+                  setOrdenSeleccionada(null);
+                  setMotivoRechazo("");
+                  setEsDialogRechazo(false);
+                }}
+                disabled={validando}
+              >
                 Cancelar
               </Button>
-              {ordenSeleccionada && ordenSeleccionada.cliente.estado_cuenta === 'Activo' && 
-               ordenSeleccionada.descripcion_solicitud.trim().length >= 20 ? (
-                <Button onClick={validarOrden} disabled={validando}>
-                  {validando ? 'Validando...' : 'Validar Orden'}
+              
+              {esDialogRechazo ? (
+                <Button 
+                  variant="destructive" 
+                  onClick={rechazarOrden} 
+                  disabled={validando || !motivoRechazo.trim() || motivoRechazo.trim().length < 10}
+                >
+                  {validando ? 'Rechazando...' : 'Rechazar Orden'}
                 </Button>
               ) : (
-                <Button variant="destructive" onClick={rechazarOrden} disabled={validando || !motivoRechazo.trim()}>
-                  {validando ? 'Rechazando...' : 'Rechazar Orden'}
+                <Button 
+                  onClick={validarOrden} 
+                  disabled={validando || 
+                    (ordenSeleccionada && (
+                      ordenSeleccionada.cliente.estado_cuenta !== 'Activo' || 
+                      ordenSeleccionada.descripcion_solicitud.trim().length < 20
+                    ))
+                  }
+                >
+                  {validando ? 'Validando...' : 'Validar Orden'}
                 </Button>
               )}
             </DialogFooter>

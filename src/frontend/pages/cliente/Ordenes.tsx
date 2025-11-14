@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/frontend/components/ui/alert";
 import { supabase } from "@/backend/config/supabaseClient";
 import { useAuth } from "@/frontend/context/AuthContext";
 import { useToast } from "@/frontend/context/ToastContext";
+import { formatearSoloFechaVenezuela } from "@/shared/utils/dateUtils";
 
 interface Orden {
   id_orden: number;
@@ -148,11 +149,8 @@ export default function ClienteOrdenes() {
   };
 
   const formatFecha = (fecha: string) => {
-    return new Date(fecha).toLocaleDateString('es-VE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    // Usar la función de dateUtils que maneja correctamente la zona horaria de Venezuela
+    return formatearSoloFechaVenezuela(fecha);
   };
 
 

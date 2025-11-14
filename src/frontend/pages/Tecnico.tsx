@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import Layout from "@/frontend/components/Layout";
 import DashboardCard from "@/frontend/components/DashboardCard";
 import { Button } from "@/frontend/components/ui/button";
-import { FileText, Play, Square, Camera, AlertCircle, Wrench, Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/frontend/components/ui/alert";
+import { FileText, Wrench, Loader2, Calendar, Clock } from "lucide-react";
 import { Badge } from "@/frontend/components/ui/badge";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/frontend/context/AuthContext";
 import { useToast } from "@/frontend/context/ToastContext";
 import { supabase } from "@/backend/config/supabaseClient";
+import { formatearHoraVenezuela, formatearSoloFechaVenezuela, parsearFechaUTC } from "@/shared/utils/dateUtils";
 
 interface Orden {
   id_orden: number;
@@ -31,6 +33,7 @@ export default function Tecnico() {
   const navigate = useNavigate();
   const [ordenes, setOrdenes] = useState<Orden[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [citasDelDia, setCitasDelDia] = useState<Array<{ id_cita: number; fecha_programada: string; numero_orden: string; hora: string }>>([]);
 
   // Mostrar mensaje de bienvenida solo cuando es un nuevo ingreso (después de login)
   useEffect(() => {
@@ -109,7 +112,7 @@ export default function Tecnico() {
           )
         `)
         .eq('id_tecnico_asignado', tecnicoData.id_tecnico)
-        .in('estado', ['Asignada', 'En Proceso', 'Completada', 'Completada (pendiente de confirmación)'])
+        .in('estado', ['Asignada', 'En Proceso'])
         .order('fecha_asignacion', { ascending: false })
         .limit(10);
 
@@ -148,6 +151,9 @@ export default function Tecnico() {
       console.log('📋 Órdenes con citas:', ordenesFormateadas.filter(o => o.citas && o.citas.length > 0).length);
 
       setOrdenes(ordenesFormateadas);
+      
+      // Verificar citas del día
+      verificarCitasDelDia(ordenesFormateadas);
     } catch (err: any) {
       console.error('Error cargando órdenes:', err);
       error('Error', 'No se pudieron cargar las órdenes asignadas');
@@ -155,13 +161,68 @@ export default function Tecnico() {
       setCargando(false);
     }
   };
+  
+  const verificarCitasDelDia = (ordenes: Orden[]) => {
+    // Crear fecha actual en UTC para comparar correctamente
+    const ahora = new Date();
+    const fechaActualUTC = new Date(Date.UTC(
+      ahora.getUTCFullYear(),
+      ahora.getUTCMonth(),
+      ahora.getUTCDate(),
+      0, 0, 0, 0
+    ));
+    const fechaFinDiaUTC = new Date(Date.UTC(
+      ahora.getUTCFullYear(),
+      ahora.getUTCMonth(),
+      ahora.getUTCDate(),
+      23, 59, 59, 999
+    ));
+    
+    const citasHoy: Array<{ id_cita: number; fecha_programada: string; numero_orden: string; hora: string }> = [];
+    
+    ordenes.forEach(orden => {
+      if (orden.citas && orden.citas.length > 0) {
+        orden.citas.forEach(cita => {
+          // Normalizar la fecha para forzar interpretación como UTC
+          const fechaProgramada = parsearFechaUTC(cita.fecha_programada);
+          
+          // Verificar si la cita es hoy (comparar en UTC)
+          if (fechaProgramada >= fechaActualUTC && fechaProgramada <= fechaFinDiaUTC && cita.estado_cita === 'Programada') {
+            const hora = formatearHoraVenezuela(cita.fecha_programada);
+            citasHoy.push({
+              id_cita: cita.id_cita || 0,
+              fecha_programada: cita.fecha_programada,
+              numero_orden: orden.numero_orden,
+              hora: hora
+            });
+          }
+        });
+      }
+    });
+    
+    setCitasDelDia(citasHoy);
+    
+    // Mostrar notificación si hay citas del día
+    if (citasHoy.length > 0) {
+      const mensaje = citasHoy.length === 1
+        ? `Tienes 1 cita programada para hoy a las ${citasHoy[0].hora} (Orden: ${citasHoy[0].numero_orden})`
+        : `Tienes ${citasHoy.length} citas programadas para hoy.`;
+      
+      // Solo mostrar notificación si es un nuevo ingreso o si no se ha mostrado antes
+      const ahora = new Date();
+      const fechaHoy = ahora.toISOString().split('T')[0];
+      const citasNotificadas = sessionStorage.getItem('citas_del_dia_notificadas');
+      if (!citasNotificadas || citasNotificadas !== fechaHoy) {
+        setTimeout(() => {
+          success('Citas del Día', mensaje);
+          sessionStorage.setItem('citas_del_dia_notificadas', fechaHoy);
+        }, 1500);
+      }
+    }
+  };
 
   const formatFecha = (fecha: string) => {
-    return new Date(fecha).toLocaleDateString('es-VE', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    return formatearSoloFechaVenezuela(fecha);
   };
 
 
@@ -174,12 +235,40 @@ export default function Tecnico() {
             Bienvenido, {usuario?.nombre_completo}
           </p>
         </div>
-
+        
         <DashboardCard
-          title="Órdenes Asignadas"
+          title="Órdenes Activas"
           description="Servicios pendientes de realizar"
           icon={FileText}
         >
+          {/* Sección de Citas del Día integrada */}
+          {citasDelDia.length > 0 && (
+            <Alert className="bg-blue-50 border-blue-200 mb-4">
+              <Calendar className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                <p className="font-semibold mb-2">
+                  {citasDelDia.length === 1 ? 'Tienes 1 cita programada para hoy' : `Tienes ${citasDelDia.length} citas programadas para hoy`}
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  {citasDelDia.map((cita, index) => (
+                    <li key={index}>
+                      Orden {cita.numero_orden} a las <strong>{cita.hora}</strong>
+                    </li>
+                  ))}
+                </ul>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-3"
+                  onClick={() => navigate('/tecnico/citas')}
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Ver Todas las Citas
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {cargando ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -189,14 +278,6 @@ export default function Tecnico() {
             <div className="text-center py-8">
               <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
               <p className="text-sm text-muted-foreground">No tienes órdenes asignadas en este momento</p>
-              <Button 
-                variant="outline" 
-                className="mt-4" 
-                asChild
-                onClick={() => navigate('/tecnico/ordenes')}
-              >
-                <Link to="/tecnico/ordenes">Ver todas las órdenes</Link>
-              </Button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -227,106 +308,20 @@ export default function Tecnico() {
                       size="sm" 
                       className="flex-1" 
                       asChild
-                      onClick={() => navigate(`/tecnico/gestionar-ejecucion`)}
                     >
                       <Link to="/tecnico/gestionar-ejecucion">
-                        <Play className="mr-2 h-4 w-4" />
-                        Gestionar
-                      </Link>
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      asChild
-                      onClick={() => navigate(`/tecnico/ordenes`)}
-                    >
-                      <Link to="/tecnico/ordenes">
-                        Ver Detalles
+                        <Wrench className="mr-2 h-4 w-4" />
+                        Gestionar Ejecución
                       </Link>
                     </Button>
                   </div>
                 </div>
               ))}
-              {ordenes.length >= 5 && (
-                <div className="pt-2">
-                  <Button variant="outline" className="w-full" asChild>
-                    <Link to="/tecnico/ordenes">
-                      Ver todas las órdenes
-                    </Link>
-                  </Button>
-                </div>
-              )}
             </div>
           )}
         </DashboardCard>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <DashboardCard
-            title="Gestión de Trabajo"
-            description="Controla tu tiempo de servicio"
-            icon={Square}
-          >
-            <div className="space-y-3">
-              <Button className="w-full">
-                <Play className="mr-2 h-4 w-4" />
-                Registrar Inicio de Trabajo
-              </Button>
-              <Button variant="destructive" className="w-full">
-                <Square className="mr-2 h-4 w-4" />
-                Registrar Fin de Trabajo
-              </Button>
-            </div>
-          </DashboardCard>
 
-          <DashboardCard
-            title="Documentación"
-            description="Registro de evidencias"
-            icon={Camera}
-          >
-            <div className="space-y-3">
-              <Button variant="outline" className="w-full" asChild>
-                <Link to="/tecnico/documentar">
-                  <Camera className="mr-2 h-4 w-4" />
-                  Subir Fotos del Trabajo
-                </Link>
-              </Button>
-              <Button variant="outline" className="w-full" asChild>
-                <Link to="/tecnico/documentar">
-                  <FileText className="mr-2 h-4 w-4" />
-                  Añadir Notas
-                </Link>
-              </Button>
-            </div>
-          </DashboardCard>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <DashboardCard
-            title="Reportar Impedimentos"
-            description="Informa problemas encontrados"
-            icon={AlertCircle}
-          >
-            <Button variant="outline" className="w-full" asChild>
-              <Link to="/tecnico/reportar-impedimento">
-                <AlertCircle className="mr-2 h-4 w-4" />
-                Reportar Problema
-              </Link>
-            </Button>
-          </DashboardCard>
-
-          <DashboardCard
-            title="Mis Especialidades"
-            description="Áreas de experiencia"
-            icon={Wrench}
-          >
-            <Button variant="outline" className="w-full" asChild>
-              <Link to="/tecnico/especialidades">
-                <Wrench className="mr-2 h-4 w-4" />
-                Gestionar Especialidades
-              </Link>
-            </Button>
-          </DashboardCard>
-        </div>
       </div>
     </Layout>
   );

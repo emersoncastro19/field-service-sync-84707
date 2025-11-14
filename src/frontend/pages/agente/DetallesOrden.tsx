@@ -21,6 +21,7 @@ import {
 } from "@/frontend/components/ui/alert-dialog";
 import { supabase } from "@/backend/config/supabaseClient";
 import { useToast } from "@/frontend/context/ToastContext";
+import { formatearFechaVenezuela } from "@/shared/utils/dateUtils";
 
 interface OrdenDetalle {
   id_orden: number;
@@ -307,7 +308,6 @@ export default function DetallesOrden() {
       'Asignada': { variant: 'default' as const, label: 'Asignada' },
       'En Proceso': { variant: 'default' as const, label: 'En Proceso' },
       'Completada': { variant: 'default' as const, label: 'Completada' },
-      'Completada (pendiente de confirmación)': { variant: 'default' as const, label: 'Pendiente Confirmación' },
       'Cancelada': { variant: 'destructive' as const, label: 'Cancelada' },
     };
 
@@ -316,13 +316,8 @@ export default function DetallesOrden() {
   };
 
   const formatFecha = (fecha: string) => {
-    return new Date(fecha).toLocaleDateString('es-VE', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    // Usar formatearFechaVenezuela para manejar correctamente la zona horaria
+    return formatearFechaVenezuela(fecha);
   };
 
   if (cargando) {

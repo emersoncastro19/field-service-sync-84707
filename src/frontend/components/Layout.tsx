@@ -41,14 +41,9 @@ const menuItems = {
   ],
   technician: [
     { icon: Home, label: "Panel de Control", path: "/tecnico" },
-    { icon: FileText, label: "Órdenes Asignadas", path: "/tecnico/ordenes" },
     { icon: Calendar, label: "Mis Citas", path: "/tecnico/citas" },
-    { icon: Wrench, label: "Gestionar Ejecución de Servicio", path: "/tecnico/gestionar-ejecucion", subItems: [
-      { icon: Play, label: "Iniciar/Finalizar Trabajo", path: "/tecnico/gestionar-ejecucion" },
-      { icon: Camera, label: "Documentar Servicio", path: "/tecnico/documentar" },
-    ]},
-    { icon: AlertCircle, label: "Reportar Impedimentos", path: "/tecnico/reportar-impedimento" },
-    { icon: Wrench, label: "Gestionar Especialidades", path: "/tecnico/especialidades" },
+    { icon: Wrench, label: "Gestionar Ejecución de Servicio", path: "/tecnico/gestionar-ejecucion" },
+    { icon: History, label: "Órdenes Completadas", path: "/tecnico/ordenes-completadas" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   admin: [

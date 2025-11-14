@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/frontend/components/ui/alert";
 import { supabase } from "@/backend/config/supabaseClient";
 import { useAuth } from "@/frontend/context/AuthContext";
 import { useToast } from "@/frontend/context/ToastContext";
+import { formatearFechaVenezuela, formatearSoloFechaVenezuela } from "@/shared/utils/dateUtils";
 
 interface Orden {
   id_orden: number;
@@ -124,7 +125,7 @@ export default function TecnicoOrdenes() {
           )
         `)
         .eq('id_tecnico_asignado', tecnicoData.id_tecnico)
-        .in('estado', ['Asignada', 'En Proceso', 'Completada', 'Cancelada', 'Con_Impedimento', 'Completada (pendiente de confirmación)'])
+        .in('estado', ['Asignada', 'En Proceso', 'Completada', 'Cancelada', 'Con_Impedimento'])
         .order('fecha_asignacion', { ascending: false });
 
       if (ordenesError) throw ordenesError;
@@ -173,11 +174,7 @@ export default function TecnicoOrdenes() {
 
   const formatFecha = (fecha: string | null) => {
     if (!fecha) return 'No definida';
-    return new Date(fecha).toLocaleDateString('es-VE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    return formatearSoloFechaVenezuela(fecha);
   };
 
 
@@ -275,13 +272,7 @@ export default function TecnicoOrdenes() {
                           <div className="flex-1">
                             <p className="text-muted-foreground">Cita Programada</p>
                             <p className="font-medium">
-                              {new Date(orden.citas[0].fecha_programada).toLocaleDateString('es-VE', {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })} - {orden.citas[0].estado_cita}
+                              {formatearFechaVenezuela(orden.citas[0].fecha_programada)} - {orden.citas[0].estado_cita}
                             </p>
                           </div>
                         </div>

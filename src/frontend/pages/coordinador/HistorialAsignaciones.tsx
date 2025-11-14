@@ -9,6 +9,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/backend/config/supabaseClient";
 import { useAuth } from "@/frontend/context/AuthContext";
 import { useToast } from "@/frontend/context/ToastContext";
+import { formatearFechaVenezuela, formatearSoloFechaVenezuela } from "@/shared/utils/dateUtils";
 
 interface OrdenAsignada {
   id_orden: number;
@@ -125,7 +126,6 @@ export default function HistorialAsignaciones() {
       'Asignada': { variant: 'default', className: 'bg-blue-100 text-blue-800', icon: CheckCircle2 },
       'En Proceso': { variant: 'default', className: 'bg-yellow-100 text-yellow-800', icon: Clock },
       'Completada': { variant: 'default', className: 'bg-green-100 text-green-800', icon: CheckCircle2 },
-      'Completada (pendiente de confirmación)': { variant: 'default', className: 'bg-orange-100 text-orange-800', icon: Clock },
     };
 
     const estilo = estilos[estado] || { variant: 'secondary' as const, icon: FileText };
@@ -142,23 +142,12 @@ export default function HistorialAsignaciones() {
 
   const formatFecha = (fecha: string | null) => {
     if (!fecha) return 'No asignada';
-    return new Date(fecha).toLocaleDateString('es-VE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatearFechaVenezuela(fecha);
   };
 
-  const formatFechaCita = (fecha: string) => {
-    return new Date(fecha).toLocaleDateString('es-VE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const formatFechaCita = (fecha: string | null) => {
+    if (!fecha) return 'No programada';
+    return formatearFechaVenezuela(fecha);
   };
 
   // Filtrar órdenes

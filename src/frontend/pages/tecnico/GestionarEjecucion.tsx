@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/backend/config/supabaseClient";
 import { useAuth } from "@/frontend/context/AuthContext";
 import { useToast } from "@/frontend/context/ToastContext";
+import { formatearFechaVenezuela, formatearHoraVenezuela, formatearSoloFechaVenezuela, parsearFechaUTC, obtenerFechaActualVenezuelaUTC } from "@/shared/utils/dateUtils";
 
 interface Orden {
   id_orden: number;
@@ -39,6 +40,11 @@ interface Orden {
     repuestos_utilizados?: string | null;
     recomendaciones?: string | null;
   };
+  cita?: {
+    id_cita: number;
+    fecha_programada: string;
+    estado_cita: string;
+  } | null;
   impedimentos?: Array<{
     id_impedimento: number;
     tipo_impedimento: string;
@@ -137,7 +143,53 @@ export default function GestionarEjecucion() {
         ejecucionesData = ejecuciones || [];
       }
 
-      // 4. Obtener impedimentos de estas órdenes
+      // 4. Obtener citas de estas órdenes
+      let citasData: any[] = [];
+      if (ordenIds.length > 0) {
+        const { data: citas, error: citasError } = await supabase
+          .from('citas')
+          .select('*')
+          .in('id_orden', ordenIds)
+          .order('fecha_programada', { ascending: false });
+        
+        if (citasError) {
+          console.error('Error obteniendo citas:', citasError);
+        } else {
+          citasData = citas || [];
+          
+          // DEBUG: Verificar formato de fecha que devuelve Supabase
+          if (citasData.length > 0) {
+            citasData.forEach((c, index) => {
+              const fechaRaw = c.fecha_programada;
+              const fechaNormalizada = parsearFechaUTC(fechaRaw);
+              
+              console.log(`🔍 DEBUG - Cita ${index + 1} de Supabase:`, {
+                id_cita: c.id_cita,
+                fecha_programada_RAW: fechaRaw,
+                fecha_programada_tieneZ: fechaRaw?.endsWith('Z'),
+                fecha_programada_NORMALIZADA: fechaRaw && !fechaRaw.endsWith('Z') && !fechaRaw.match(/[+-]\d{2}:\d{2}$/) ? fechaRaw + 'Z' : fechaRaw,
+                fechaDate_SIN_Z: fechaRaw ? new Date(fechaRaw).toISOString() : null,
+                fechaDate_CON_Z: fechaNormalizada.toISOString(),
+                hora_SIN_Z: fechaRaw ? new Date(fechaRaw).toLocaleTimeString('en-US', {
+                  timeZone: 'America/Caracas',
+                  hour12: true,
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }) : null,
+                hora_CON_Z: fechaNormalizada.toLocaleTimeString('en-US', {
+                  timeZone: 'America/Caracas',
+                  hour12: true,
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }),
+                formatearHoraVenezuela_RESULT: formatearHoraVenezuela(c.fecha_programada)
+              });
+            });
+          }
+        }
+      }
+
+      // 5. Obtener impedimentos de estas órdenes
       let impedimentosData: any[] = [];
       if (ordenIds.length > 0) {
         const { data: impedimentos } = await supabase
@@ -149,10 +201,14 @@ export default function GestionarEjecucion() {
         impedimentosData = impedimentos || [];
       }
 
-      // 5. Combinar datos
+      // 6. Combinar datos
       const ordenesFormateadas: Orden[] = ordenesData.map((orden: any) => {
         const ejecucion = ejecucionesData.find((e: any) => e.id_orden === orden.id_orden);
         const impedimentosOrden = impedimentosData.filter((i: any) => i.id_orden === orden.id_orden);
+        // Obtener la cita más reciente para esta orden (puede haber múltiples citas por reprogramaciones)
+        const citaOrden = citasData
+          .filter((c: any) => c.id_orden === orden.id_orden)
+          .sort((a: any, b: any) => parsearFechaUTC(b.fecha_programada).getTime() - parsearFechaUTC(a.fecha_programada).getTime())[0];
         
         // Parsear trabajo_realizado para extraer repuestos y recomendaciones si existen
         let repuestos = '';
@@ -194,6 +250,11 @@ export default function GestionarEjecucion() {
             repuestos_utilizados: repuestos,
             recomendaciones: recomendaciones
           } : undefined,
+          cita: citaOrden ? {
+            id_cita: citaOrden.id_cita,
+            fecha_programada: citaOrden.fecha_programada,
+            estado_cita: citaOrden.estado_cita
+          } : null,
           impedimentos: impedimentosOrden.length > 0 ? impedimentosOrden.map((imp: any) => ({
             id_impedimento: imp.id_impedimento,
             tipo_impedimento: imp.tipo_impedimento,
@@ -237,6 +298,29 @@ export default function GestionarEjecucion() {
       return;
     }
 
+    // Validar que la fecha actual sea mayor o igual a la fecha programada (si existe cita)
+    if (orden.cita) {
+      const fechaActual = new Date();
+      
+      // Normalizar la fecha de la cita para forzar interpretación como UTC
+      const fechaProgramada = parsearFechaUTC(orden.cita.fecha_programada);
+      
+      if (fechaActual < fechaProgramada) {
+        // Formatear en zona horaria de Venezuela usando formato numérico simple
+        const fecha = parsearFechaUTC(orden.cita.fecha_programada);
+        const fechaFormateada = fecha.toLocaleDateString('es-VE', {
+          timeZone: 'America/Caracas',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        const horaFormateada = formatearHoraVenezuela(orden.cita.fecha_programada);
+        error('Error', `Esta cita aún no está disponible para ejecución. La fecha programada es el ${fechaFormateada} a las ${horaFormateada}.`);
+        setProcesando(prev => ({ ...prev, [orden.id_orden]: false }));
+        return;
+      }
+    }
+
     setProcesando(prev => ({ ...prev, [orden.id_orden]: true }));
     try {
       // 1. Obtener el id_tecnico del usuario
@@ -253,10 +337,11 @@ export default function GestionarEjecucion() {
       if (tecnicoError) throw tecnicoError;
 
       // 2. Crear ejecución de servicio
+      const fechaActualInicio = obtenerFechaActualVenezuelaUTC();
       const ejecucionDataBase = {
         id_orden: orden.id_orden,
         id_tecnico: tecnicoData.id_tecnico,
-        fecha_inicio: new Date().toISOString(),
+        fecha_inicio: fechaActualInicio,
         trabajo_realizado: null
       };
 
@@ -298,7 +383,113 @@ export default function GestionarEjecucion() {
 
       if (updateError) throw updateError;
 
-      // 4. Log de auditoría
+      // 4. Actualizar estado de la cita si existe (de "Confirmada" a "En Proceso")
+      if (orden.cita?.id_cita) {
+        const { error: citaError } = await supabase
+          .from('citas')
+          .update({ 
+            estado_cita: 'En Proceso'
+          })
+          .eq('id_cita', orden.cita.id_cita);
+
+        if (citaError) {
+          console.warn('Error actualizando estado de la cita a "En Proceso":', citaError);
+          // No lanzamos error, solo registramos la advertencia
+        }
+      }
+
+      // 5. Obtener IDs para notificaciones
+      // Obtener ID del cliente
+      const { data: ordenDataCliente } = await supabase
+        .from('ordenes_servicio')
+        .select('id_cliente')
+        .eq('id_orden', orden.id_orden)
+        .single();
+
+      let idUsuarioCliente: number | null = null;
+
+      if (ordenDataCliente?.id_cliente) {
+        const { data: clienteData } = await supabase
+          .from('clientes')
+          .select('id_usuario')
+          .eq('id_cliente', ordenDataCliente.id_cliente)
+          .single();
+
+        if (clienteData?.id_usuario) {
+          idUsuarioCliente = typeof clienteData.id_usuario === 'string' 
+            ? parseInt(clienteData.id_usuario, 10) 
+            : clienteData.id_usuario;
+        }
+      }
+
+      // Obtener ID del coordinador
+      const { data: ordenDataCoordinador } = await supabase
+        .from('ordenes_servicio')
+        .select('id_coordinador_supervisor')
+        .eq('id_orden', orden.id_orden)
+        .single();
+
+      let idUsuarioCoordinador: number | null = null;
+
+      if (ordenDataCoordinador?.id_coordinador_supervisor) {
+        const { data: coordinadorData } = await supabase
+          .from('coordinadores_campo')
+          .select('id_usuario')
+          .eq('id_coordinador', ordenDataCoordinador.id_coordinador_supervisor)
+          .single();
+
+        if (coordinadorData?.id_usuario) {
+          idUsuarioCoordinador = typeof coordinadorData.id_usuario === 'string' 
+            ? parseInt(coordinadorData.id_usuario, 10) 
+            : coordinadorData.id_usuario;
+        }
+      }
+
+      // Obtener nombre del técnico
+      const nombreTecnico = usuario?.nombre_completo || 'Técnico';
+
+      // 6. Crear notificaciones
+      const notificaciones = [];
+
+      // Notificar al cliente
+      if (idUsuarioCliente) {
+        notificaciones.push({
+          id_orden: orden.id_orden,
+          id_destinatario: idUsuarioCliente,
+          tipo_notificacion: 'Trabajo Iniciado',
+          canal: 'Sistema_Interno',
+          mensaje: `El técnico ha iniciado el trabajo en tu orden ${orden.numero_orden}.`,
+          fecha_enviada: fechaActualInicio,
+          leida: false
+        });
+      }
+
+      // Notificar al coordinador
+      if (idUsuarioCoordinador) {
+        notificaciones.push({
+          id_orden: orden.id_orden,
+          id_destinatario: idUsuarioCoordinador,
+          tipo_notificacion: 'Trabajo Iniciado',
+          canal: 'Sistema_Interno',
+          mensaje: `El técnico ${nombreTecnico} ha iniciado el trabajo en la orden ${orden.numero_orden}.`,
+          fecha_enviada: fechaActualInicio,
+          leida: false
+        });
+      }
+
+      if (notificaciones.length > 0) {
+        const { error: notifError } = await supabase
+          .from('notificaciones')
+          .insert(notificaciones);
+
+        if (notifError) {
+          console.error('Error enviando notificaciones:', notifError);
+        } else {
+          console.log(`✅ ${notificaciones.length} notificaciones enviadas (Cliente y Coordinador)`);
+        }
+      }
+
+      // 7. Log de auditoría
       await supabase
         .from('logs_auditoria')
         .insert([
@@ -307,11 +498,11 @@ export default function GestionarEjecucion() {
             id_orden: orden.id_orden,
             accion: 'INICIAR_TRABAJO',
             descripcion: `Técnico inició trabajo en orden ${orden.numero_orden}`,
-            timestamp: new Date().toISOString()
+            timestamp: fechaActualInicio
           }
         ]);
 
-      success('Trabajo iniciado', `Has iniciado el trabajo en la orden ${orden.numero_orden}`);
+      success('Trabajo iniciado', `Has iniciado el trabajo en la orden ${orden.numero_orden}. El cliente y el coordinador han sido notificados.`);
       await cargarOrdenes();
     } catch (err: any) {
       console.error('Error iniciando trabajo:', err);
@@ -322,21 +513,22 @@ export default function GestionarEjecucion() {
   };
 
   const finalizarTrabajo = async (orden: Orden) => {
-    const trabajo = trabajoRealizado[orden.id_orden] || '';
-    
-    if (!trabajo.trim()) {
-      error('Error', 'Debes describir el trabajo realizado');
-      return;
-    }
-
     if (!orden.ejecucion) {
       error('Error', 'No hay una ejecución iniciada para esta orden');
       return;
     }
 
+    // Obtener el trabajo realizado de la documentación (tab "Documentar")
+    const trabajo = trabajoRealizado[orden.id_orden] || '';
+    
+    if (!trabajo.trim()) {
+      error('Error', 'Debes documentar el trabajo realizado en la pestaña "Documentar" antes de finalizar');
+      return;
+    }
+
     setProcesando(prev => ({ ...prev, [orden.id_orden]: true }));
     try {
-      // Combinar toda la documentación
+      // Combinar toda la documentación del tab "Documentar"
       let documentacionCompleta = trabajo.trim();
       const repuestos = repuestosUtilizados[orden.id_orden] || '';
       const recom = recomendaciones[orden.id_orden] || '';
@@ -349,17 +541,23 @@ export default function GestionarEjecucion() {
         documentacionCompleta += `\n\nRecomendaciones:\n${recom.trim()}`;
       }
 
-      // 1. Subir imágenes primero (si hay)
+      // 1. Subir imágenes primero (si hay) - no bloqueamos el proceso si falla
       const imagenesOrden = imagenes[orden.id_orden] || [];
       if (imagenesOrden.length > 0) {
-        await subirImagenes(orden.id_orden, orden.ejecucion.id_ejecucion, imagenesOrden);
+        try {
+          await subirImagenes(orden.id_orden, orden.ejecucion.id_ejecucion, imagenesOrden);
+        } catch (err) {
+          // No lanzamos el error, solo lo registramos - el proceso continúa
+          console.warn('⚠️ Advertencia: No se pudieron subir algunas imágenes, pero el proceso continuará:', err);
+        }
       }
 
       // 2. Actualizar ejecución de servicio
+      const fechaActual = obtenerFechaActualVenezuelaUTC();
       const { error: ejecucionError } = await supabase
         .from('ejecuciones_servicio')
         .update({
-          fecha_fin: new Date().toISOString(),
+          fecha_fin: fechaActual,
           trabajo_realizado: documentacionCompleta,
           estado_resultado: 'Completado',
           confirmacion_cliente: 'Pendiente'
@@ -368,18 +566,13 @@ export default function GestionarEjecucion() {
 
       if (ejecucionError) throw ejecucionError;
 
-      // 3. Actualizar estado de la orden
-      const { error: updateError } = await supabase
-        .from('ordenes_servicio')
-        .update({ 
-          estado: 'Completada (pendiente de confirmación)',
-          fecha_completada: new Date().toISOString()
-        })
-        .eq('id_orden', orden.id_orden);
+      // 3. NO actualizamos el estado de la orden aquí - mantenemos "En Proceso"
+      // El campo confirmacion_cliente = 'Pendiente' en ejecuciones_servicio indica que está esperando confirmación
+      // La orden solo se marca como "Completada" cuando el cliente confirma
+      // Esto evita errores con estados no permitidos en la base de datos (CHECK constraint)
+      console.log(`✅ Ejecución completada - El estado confirmacion_cliente = 'Pendiente' indica que está esperando confirmación del cliente`);
 
-      if (updateError) throw updateError;
-
-      // 4. Obtener ID del cliente para notificación
+      // 5. Obtener ID del cliente para notificación
       // Primero obtener id_cliente de la orden
       const { data: ordenData } = await supabase
         .from('ordenes_servicio')
@@ -403,24 +596,35 @@ export default function GestionarEjecucion() {
         }
       }
 
-      // 5. Crear notificación al cliente
+      // 6. Crear notificación al cliente (no bloqueamos si falla)
       if (idUsuarioCliente) {
-        await supabase
-          .from('notificaciones')
-          .insert([
-            {
-              id_orden: orden.id_orden,
-              id_destinatario: idUsuarioCliente,
-              tipo_notificacion: 'Servicio Completado',
-              canal: 'Sistema_Interno',
-              mensaje: `El técnico ha completado el trabajo en tu orden ${orden.numero_orden}. Por favor confirma si el servicio fue realizado satisfactoriamente.`,
-              fecha_enviada: new Date().toISOString(),
-              leida: false
-            }
-          ]);
+        try {
+          const { error: notifError } = await supabase
+            .from('notificaciones')
+            .insert([
+              {
+                id_orden: orden.id_orden,
+                id_destinatario: idUsuarioCliente,
+                tipo_notificacion: 'Servicio Completado',
+                canal: 'Sistema_Interno',
+                mensaje: `El técnico ha completado el trabajo en tu orden ${orden.numero_orden}. Por favor confirma si el servicio fue realizado satisfactoriamente.`,
+                fecha_enviada: obtenerFechaActualVenezuelaUTC(),
+                leida: false
+              }
+            ]);
+
+          if (notifError) {
+            console.warn('⚠️ No se pudo enviar la notificación al cliente:', notifError);
+          } else {
+            console.log('✅ Notificación enviada al cliente');
+          }
+        } catch (err) {
+          console.warn('⚠️ Error al crear notificación:', err);
+          // No lanzamos el error, el proceso continúa
+        }
       }
 
-      // 6. Log de auditoría
+      // 7. Log de auditoría
       const idUsuario = typeof usuario?.id_usuario === 'string' 
         ? parseInt(usuario.id_usuario, 10) 
         : usuario?.id_usuario;
@@ -434,12 +638,12 @@ export default function GestionarEjecucion() {
               id_orden: orden.id_orden,
               accion: 'FINALIZAR_TRABAJO',
               descripcion: `Técnico finalizó trabajo en orden ${orden.numero_orden}`,
-              timestamp: new Date().toISOString()
+              timestamp: fechaActual
             }
           ]);
       }
 
-      success('Trabajo finalizado', `Has completado el trabajo en la orden ${orden.numero_orden}. El cliente ha sido notificado.`);
+      success('Trabajo finalizado', `Has finalizado el trabajo en la orden ${orden.numero_orden}. La orden está esperando confirmación del cliente. El cliente ha sido notificado y debe confirmar para que la orden se marque como "Completada".`);
       
       // Limpiar estados
       setTrabajoRealizado(prev => ({ ...prev, [orden.id_orden]: '' }));
@@ -466,49 +670,62 @@ export default function GestionarEjecucion() {
       const bucketName = 'documentacion-servicios';
       
       const urls: string[] = [];
+      let erroresSubida = 0;
       
       for (const archivo of archivos) {
-        const nombreArchivo = `${idOrden}_${idEjecucion}_${Date.now()}_${archivo.name}`;
-        const ruta = `orden-${idOrden}/${nombreArchivo}`;
-        
-        const { data, error: uploadError } = await supabase.storage
-          .from(bucketName)
-          .upload(ruta, archivo, {
-            cacheControl: '3600',
-            upsert: false
-          });
-
-        if (uploadError) {
-          console.error('Error subiendo imagen:', uploadError);
-          // Si el bucket no existe, mostrar advertencia pero continuar
-          if (uploadError.message?.includes('Bucket not found')) {
-            console.warn('Bucket no encontrado. Por favor crea el bucket "documentacion-servicios" en Supabase Storage.');
-          }
-          continue;
-        }
-
-        // Obtener URL pública
-        const { data: urlData } = supabase.storage
-          .from(bucketName)
-          .getPublicUrl(ruta);
-
-        if (urlData?.publicUrl) {
-          urls.push(urlData.publicUrl);
+        try {
+          const nombreArchivo = `${idOrden}_${idEjecucion}_${Date.now()}_${archivo.name}`;
+          const ruta = `orden-${idOrden}/${nombreArchivo}`;
           
-          // Guardar referencia en la base de datos (necesitarías una tabla para esto)
-          // Por ahora, guardamos las URLs en un campo JSON en ejecuciones_servicio
-          // O podrías crear una tabla 'imagenes_documentacion' con: id_imagen, id_ejecucion, url_imagen, fecha_subida
+          const { data, error: uploadError } = await supabase.storage
+            .from(bucketName)
+            .upload(ruta, archivo, {
+              cacheControl: '3600',
+              upsert: false
+            });
+
+          if (uploadError) {
+            console.error('Error subiendo imagen:', uploadError);
+            erroresSubida++;
+            
+            // Si el bucket no existe, mostrar advertencia pero continuar
+            if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('not found')) {
+              console.warn('⚠️ Bucket no encontrado. Por favor crea el bucket "documentacion-servicios" en Supabase Storage.');
+              // Si el bucket no existe, no intentamos subir más imágenes
+              break;
+            }
+            continue;
+          }
+
+          // Obtener URL pública
+          const { data: urlData } = supabase.storage
+            .from(bucketName)
+            .getPublicUrl(ruta);
+
+          if (urlData?.publicUrl) {
+            urls.push(urlData.publicUrl);
+          }
+        } catch (err: any) {
+          console.error('Error procesando imagen individual:', err);
+          erroresSubida++;
         }
       }
 
       if (urls.length > 0) {
-        // Guardar URLs en ejecuciones_servicio (como JSON en un campo de texto o crear tabla separada)
+        console.log(`✅ ${urls.length} imagen(es) subida(s) correctamente`);
+        
+        // TODO: Guardar URLs en ejecuciones_servicio (como JSON en un campo de texto o crear tabla separada)
         // Por ahora, solo mostramos éxito
-        console.log('Imágenes subidas:', urls);
+      }
+      
+      if (erroresSubida > 0 && urls.length === 0) {
+        // Si todas las imágenes fallaron, mostrar advertencia
+        console.warn('⚠️ No se pudieron subir las imágenes. Verifica que el bucket "documentacion-servicios" exista en Supabase Storage.');
       }
     } catch (err: any) {
-      console.error('Error subiendo imágenes:', err);
-      error('Advertencia', 'No se pudieron subir algunas imágenes, pero el trabajo se guardó correctamente');
+      console.error('Error en subirImagenes:', err);
+      // No lanzamos el error, solo lo registramos - el proceso principal continúa
+      console.warn('⚠️ Error al subir imágenes, pero el proceso de finalización continuará');
     } finally {
       setSubiendoImagenes(prev => ({ ...prev, [idOrden]: false }));
     }
@@ -781,13 +998,13 @@ export default function GestionarEjecucion() {
           <div className="grid gap-6">
             {ordenes.map((orden) => (
               <Card key={orden.id_orden} className="w-full">
-                <CardHeader>
+            <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2">
                         <FileText className="h-5 w-5 text-primary" />
                         {orden.numero_orden}
-                      </CardTitle>
+              </CardTitle>
                       <CardDescription className="mt-1">
                         {orden.tipo_servicio}
                       </CardDescription>
@@ -796,7 +1013,7 @@ export default function GestionarEjecucion() {
                       {orden.estado}
                     </Badge>
                   </div>
-                </CardHeader>
+            </CardHeader>
                 <CardContent>
                   {/* Información básica de la orden */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6 pb-6 border-b">
@@ -818,6 +1035,17 @@ export default function GestionarEjecucion() {
                       <p className="text-muted-foreground">Descripción</p>
                       <p className="font-medium text-xs">{orden.descripcion_solicitud}</p>
                     </div>
+                    {orden.cita && (
+                      <div className="md:col-span-2">
+                        <p className="text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          Cita Programada
+                        </p>
+                        <p className="font-medium text-xs">
+                          {formatearFechaVenezuela(orden.cita.fecha_programada)} - Estado: {orden.cita.estado_cita}
+                        </p>
+                      </div>
+                    )}
                     {orden.ejecucion?.fecha_inicio && (
                       <div>
                         <p className="text-muted-foreground flex items-center gap-1">
@@ -825,7 +1053,7 @@ export default function GestionarEjecucion() {
                           Inicio
                         </p>
                         <p className="font-medium text-xs">
-                          {new Date(orden.ejecucion.fecha_inicio).toLocaleString('es-VE')}
+                          {formatearFechaVenezuela(orden.ejecucion.fecha_inicio)}
                         </p>
                       </div>
                     )}
@@ -851,48 +1079,162 @@ export default function GestionarEjecucion() {
                     {/* Tab 1: Iniciar/Finalizar Trabajo */}
                     <TabsContent value="trabajo" className="space-y-4 mt-4">
                       {!orden.ejecucion ? (
-                        <div className="text-center py-8">
-                          <p className="text-muted-foreground mb-4">El trabajo aún no ha sido iniciado</p>
-                    <Button 
-                      onClick={() => iniciarTrabajo(orden)}
-                      disabled={procesando[orden.id_orden]}
-                      size="lg"
-                    >
-                      {procesando[orden.id_orden] ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Iniciando...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="mr-2 h-4 w-4" />
-                          Iniciar Trabajo
-                        </>
-                      )}
-                    </Button>
+                        <div className="space-y-4">
+                          {/* Verificar si hay cita programada y si la fecha actual es menor que la fecha programada */}
+                          {orden.cita && (() => {
+                            const fechaActual = new Date();
+                            
+                            // Normalizar la fecha de la cita para forzar interpretación como UTC
+                            const fechaProgramada = parsearFechaUTC(orden.cita.fecha_programada);
+                            const puedeIniciar = fechaActual >= fechaProgramada;
+                            
+                            // Formatear fecha y hora en zona horaria de Venezuela usando función helper
+                            // Usar formato numérico simple (DD/MM/YYYY) para evitar que incluya hora
+                            const fecha = parsearFechaUTC(orden.cita.fecha_programada);
+                            const fechaFormateada = fecha.toLocaleDateString('es-VE', {
+                              timeZone: 'America/Caracas',
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit'
+                            });
+                            const horaFormateada = formatearHoraVenezuela(orden.cita.fecha_programada);
+                            
+                            if (!puedeIniciar) {
+                              return (
+                                <Alert className="bg-amber-50 border-amber-200">
+                                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                                  <AlertDescription className="text-amber-800">
+                                    <p className="font-semibold mb-2">Esta cita aún no está disponible para ejecución.</p>
+                                    <p>La fecha programada es el <strong>{fechaFormateada} a las {horaFormateada}</strong>.</p>
+                                    <p className="mt-2 text-sm">Debes esperar hasta la fecha programada para iniciar el trabajo.</p>
+                                  </AlertDescription>
+                                </Alert>
+                              );
+                            }
+                            
+                            return (
+                              <Alert className="bg-green-50 border-green-200">
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <AlertDescription className="text-green-800">
+                                  <p className="font-semibold">Cita programada: {fechaFormateada} a las {horaFormateada}</p>
+                                  <p className="text-sm mt-1">Puedes iniciar el trabajo ahora.</p>
+                                </AlertDescription>
+                              </Alert>
+                            );
+                          })()}
+                          
+                          {/* Mostrar alerta si la cita está pendiente de confirmación del cliente */}
+                          {orden.cita && (orden.cita.estado_cita === 'Programada' || orden.cita.estado_cita === 'Propuesta' || orden.cita.estado_cita === 'Pendiente de Confirmación') && (
+                            <Alert className="bg-amber-50 border-amber-200">
+                              <AlertCircle className="h-4 w-4 text-amber-600" />
+                              <AlertDescription className="text-amber-800">
+                                <p className="font-semibold">Cita pendiente de confirmación del cliente</p>
+                                <p className="text-sm mt-1">El cliente aún no ha confirmado esta cita. Espera a que el cliente confirme la fecha antes de proceder.</p>
+                              </AlertDescription>
+                            </Alert>
+                          )}
+
+                          {/* Mostrar alerta si la cita está confirmada pero la fecha aún no ha llegado */}
+                          {orden.cita && orden.cita.estado_cita === 'Confirmada' && (() => {
+                            const fechaActual = new Date();
+                            const fechaProgramada = parsearFechaUTC(orden.cita.fecha_programada);
+                            const puedeIniciar = fechaActual >= fechaProgramada;
+                            
+                            if (!puedeIniciar) {
+                              const fechaFormateada = fechaProgramada.toLocaleDateString('es-VE', {
+                                timeZone: 'America/Caracas',
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit'
+                              });
+                              const horaFormateada = formatearHoraVenezuela(orden.cita.fecha_programada);
+                              
+                              return (
+                                <Alert className="bg-amber-50 border-amber-200">
+                                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                                  <AlertDescription className="text-amber-800">
+                                    <p className="font-semibold">Cita confirmada por el cliente</p>
+                                    <p className="text-sm mt-1">La fecha programada aún no ha llegado. La cita es el <strong>{fechaFormateada} a las {horaFormateada}</strong>. Podrás iniciar el trabajo cuando llegue la fecha.</p>
+                                  </AlertDescription>
+                                </Alert>
+                              );
+                            }
+                            
+                            return (
+                              <Alert className="bg-green-50 border-green-200">
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <AlertDescription className="text-green-800">
+                                  <p className="font-semibold">Cita confirmada por el cliente</p>
+                                  <p className="text-sm mt-1">El cliente ha confirmado la cita y la fecha ya llegó. Puedes iniciar el trabajo ahora.</p>
+                                </AlertDescription>
+                              </Alert>
+                            );
+                          })()}
+                          
+                          {/* Mostrar botón de iniciar trabajo */}
+                          <div className="text-center py-4">
+                            <p className="text-muted-foreground mb-4">
+                              {orden.ejecucion 
+                                ? 'El trabajo ya ha sido iniciado' 
+                                : (orden.cita?.estado_cita === 'Programada' || orden.cita?.estado_cita === 'Propuesta' || orden.cita?.estado_cita === 'Pendiente de Confirmación')
+                                ? 'Esperando confirmación del cliente'
+                                : orden.cita?.estado_cita === 'Confirmada' && (() => {
+                                    const fechaActual = new Date();
+                                    const fechaProgramada = parsearFechaUTC(orden.cita.fecha_programada);
+                                    return fechaActual < fechaProgramada;
+                                  })()
+                                ? 'Esperando a que llegue la fecha programada'
+                                : 'El trabajo aún no ha sido iniciado'}
+                            </p>
+                            <Button 
+                              onClick={() => iniciarTrabajo(orden)}
+                              disabled={
+                                procesando[orden.id_orden] || 
+                                (orden.cita && (
+                                  (orden.cita.estado_cita === 'Programada' || orden.cita.estado_cita === 'Propuesta' || orden.cita.estado_cita === 'Pendiente de Confirmación') ||
+                                  (orden.cita.estado_cita === 'Confirmada' && (() => {
+                                    const fechaActual = new Date();
+                                    const fechaProgramada = parsearFechaUTC(orden.cita.fecha_programada);
+                                    return fechaActual < fechaProgramada;
+                                  })())
+                                ))
+                              }
+                              size="lg"
+                            >
+                              {procesando[orden.id_orden] ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Iniciando...
+                                </>
+                              ) : (
+                                <>
+                <Play className="mr-2 h-4 w-4" />
+                                  Iniciar Trabajo
+                                </>
+                              )}
+              </Button>
+                          </div>
                         </div>
                       ) : orden.ejecucion.fecha_fin ? (
                         <Alert className="bg-green-50 border-green-200">
                           <CheckCircle className="h-4 w-4 text-green-600" />
                           <AlertDescription className="text-green-800">
-                            Trabajo completado el {new Date(orden.ejecucion.fecha_fin).toLocaleString('es-VE')}
+                            Trabajo completado el {formatearFechaVenezuela(orden.ejecucion.fecha_fin)}
                           </AlertDescription>
                         </Alert>
                       ) : (
                         <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label>Trabajo Realizado *</Label>
-                            <Textarea
-                              placeholder="Describe el trabajo realizado, acciones tomadas, materiales usados, etc."
-                              value={trabajoRealizado[orden.id_orden] || ''}
-                              onChange={(e) => setTrabajoRealizado(prev => ({ ...prev, [orden.id_orden]: e.target.value }))}
-                              rows={4}
-                            />
-                          </div>
+                          <Alert className="bg-blue-50 border-blue-200">
+                            <AlertCircle className="h-4 w-4 text-blue-600" />
+                            <AlertDescription className="text-blue-800">
+                              <p className="font-semibold mb-2">Trabajo en curso</p>
+                              <p className="text-sm">El trabajo ha sido iniciado. Puedes documentar el servicio en la pestaña "Documentar" y luego finalizar el trabajo.</p>
+                            </AlertDescription>
+                          </Alert>
                           <Button 
                             className="w-full" 
                             onClick={() => finalizarTrabajo(orden)}
-                            disabled={procesando[orden.id_orden] || !trabajoRealizado[orden.id_orden]?.trim()}
+                            disabled={procesando[orden.id_orden]}
                           >
                             {procesando[orden.id_orden] ? (
                               <>
@@ -905,7 +1247,7 @@ export default function GestionarEjecucion() {
                                 Finalizar Trabajo
                               </>
                             )}
-                          </Button>
+              </Button>
                         </div>
                       )}
                     </TabsContent>
@@ -1019,11 +1361,11 @@ export default function GestionarEjecucion() {
                               </>
                             ) : (
                               <>
-                                <FileText className="mr-2 h-4 w-4" />
+                  <FileText className="mr-2 h-4 w-4" />
                                 Guardar Documentación
                               </>
                             )}
-                          </Button>
+              </Button>
                         </div>
                       )}
                     </TabsContent>
@@ -1044,7 +1386,7 @@ export default function GestionarEjecucion() {
                                   {impedimento.estado_resolucion}
                                 </Badge>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                  Reportado: {new Date(impedimento.fecha_reporte).toLocaleString('es-VE')}
+                                  Reportado: {formatearFechaVenezuela(impedimento.fecha_reporte)}
                                 </p>
                               </AlertDescription>
                             </Alert>
@@ -1103,14 +1445,14 @@ export default function GestionarEjecucion() {
                               Reportar Impedimento
                             </>
                           )}
-                        </Button>
+              </Button>
                       </div>
                     </TabsContent>
                   </Tabs>
-                </CardContent>
-              </Card>
+            </CardContent>
+          </Card>
             ))}
-          </div>
+        </div>
         )}
       </div>
     </Layout>
