@@ -199,101 +199,101 @@ export default function Coordinador() {
           </div>
         ) : (
           <>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card className="bg-gradient-to-br from-primary to-primary/80 text-white">
-                <div className="p-6">
-                  <Users className="h-8 w-8 mb-2" />
-                  <p className="text-sm font-medium">Técnicos Activos</p>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="bg-gradient-to-br from-primary to-primary/80 text-white">
+            <div className="p-6">
+              <Users className="h-8 w-8 mb-2" />
+              <p className="text-sm font-medium">Técnicos Activos</p>
                   <p className="text-3xl font-bold">{estadisticas.tecnicosActivos}</p>
-                </div>
-              </Card>
-              
-              <Card className="bg-gradient-to-br from-secondary to-secondary/80 text-white">
-                <div className="p-6">
-                  <MapPin className="h-8 w-8 mb-2" />
-                  <p className="text-sm font-medium">Servicios en Curso</p>
-                  <p className="text-3xl font-bold">{estadisticas.serviciosEnCurso}</p>
-                </div>
-              </Card>
-              
-              <Card className="bg-gradient-to-br from-orange-500 to-orange-600 text-white">
-                <div className="p-6">
-                  <AlertCircle className="h-8 w-8 mb-2" />
-                  <p className="text-sm font-medium">Impedimentos</p>
-                  <p className="text-3xl font-bold">{estadisticas.impedimentos}</p>
-                </div>
-              </Card>
-              
-              <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
-                <div className="p-6">
-                  <TrendingUp className="h-8 w-8 mb-2" />
-                  <p className="text-sm font-medium">Eficiencia</p>
-                  <p className="text-3xl font-bold">{estadisticas.eficiencia}%</p>
-                </div>
-              </Card>
             </div>
+          </Card>
+          
+          <Card className="bg-gradient-to-br from-secondary to-secondary/80 text-white">
+            <div className="p-6">
+              <MapPin className="h-8 w-8 mb-2" />
+              <p className="text-sm font-medium">Servicios en Curso</p>
+                  <p className="text-3xl font-bold">{estadisticas.serviciosEnCurso}</p>
+            </div>
+          </Card>
+          
+          <Card className="bg-gradient-to-br from-orange-500 to-orange-600 text-white">
+            <div className="p-6">
+              <AlertCircle className="h-8 w-8 mb-2" />
+              <p className="text-sm font-medium">Impedimentos</p>
+                  <p className="text-3xl font-bold">{estadisticas.impedimentos}</p>
+            </div>
+          </Card>
+          
+          <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
+            <div className="p-6">
+              <TrendingUp className="h-8 w-8 mb-2" />
+              <p className="text-sm font-medium">Eficiencia</p>
+                  <p className="text-3xl font-bold">{estadisticas.eficiencia}%</p>
+            </div>
+          </Card>
+        </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <DashboardCard
-                title="Supervisión de Técnicos"
-                description="Estado actual de los técnicos"
-                icon={Users}
-              >
-                <div className="space-y-3">
+        <div className="grid gap-6 lg:grid-cols-2">
+          <DashboardCard
+            title="Supervisión de Técnicos"
+            description="Estado actual de los técnicos"
+            icon={Users}
+          >
+            <div className="space-y-3">
                   {tecnicos.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
                       No hay técnicos activos en este momento
                     </p>
                   ) : (
                     tecnicos.map((tech) => (
-                      <div
-                        key={tech.id}
-                        className="flex items-center justify-between p-4 rounded-lg border bg-card"
-                      >
-                        <div className="space-y-1">
-                          <p className="font-medium">{tech.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {tech.activeOrders} órdenes activas
-                          </p>
-                        </div>
-                        <Badge variant={tech.status === "Disponible" ? "default" : "secondary"}>
-                          {tech.status}
-                        </Badge>
-                      </div>
+                <div
+                  key={tech.id}
+                  className="flex items-center justify-between p-4 rounded-lg border bg-card"
+                >
+                  <div className="space-y-1">
+                    <p className="font-medium">{tech.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {tech.activeOrders} órdenes activas
+                    </p>
+                  </div>
+                  <Badge variant={tech.status === "Disponible" ? "default" : "secondary"}>
+                    {tech.status}
+                  </Badge>
+                </div>
                     ))
                   )}
-                </div>
-                <Button className="w-full mt-4" asChild>
-                  <Link to="/coordinador/tecnicos">Ver Todos los Técnicos</Link>
-                </Button>
-              </DashboardCard>
-
-              <DashboardCard
-                title="Asignar/Reasignar Órdenes"
-                description="Gestionar asignaciones"
-                icon={MapPin}
-              >
-                <Button className="w-full" asChild>
-                  <Link to="/coordinador/asignar">
-                    <MapPin className="mr-2 h-4 w-4" />
-                    Gestionar Asignaciones
-                  </Link>
-                </Button>
-              </DashboardCard>
             </div>
+            <Button className="w-full mt-4" asChild>
+              <Link to="/coordinador/tecnicos">Ver Todos los Técnicos</Link>
+            </Button>
+          </DashboardCard>
 
-            <DashboardCard
-              title="Gestionar Citas de Servicio"
-              description="Calendario de servicios"
-              icon={Calendar}
-            >
-              <Button variant="outline" className="w-full" asChild>
-                <Link to="/coordinador/citas">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  Ver Calendario
-                </Link>
-              </Button>
-            </DashboardCard>
+          <DashboardCard
+            title="Asignar/Reasignar Órdenes"
+            description="Gestionar asignaciones"
+            icon={MapPin}
+          >
+            <Button className="w-full" asChild>
+              <Link to="/coordinador/asignar">
+                <MapPin className="mr-2 h-4 w-4" />
+                Gestionar Asignaciones
+              </Link>
+            </Button>
+          </DashboardCard>
+        </div>
+
+        <DashboardCard
+          title="Gestionar Citas de Servicio"
+          description="Calendario de servicios"
+          icon={Calendar}
+        >
+          <Button variant="outline" className="w-full" asChild>
+            <Link to="/coordinador/citas">
+              <Calendar className="mr-2 h-4 w-4" />
+              Ver Calendario
+            </Link>
+          </Button>
+        </DashboardCard>
           </>
         )}
       </div>

@@ -86,3 +86,12 @@ INSERT INTO notificaciones (
 -- NOTA: Si después de ejecutar esto el error persiste, puede ser cache de PostgreSQL.
 -- Intenta reiniciar la aplicación y probar de nuevo.
 
+
+
+
+
+
+
+
+
+

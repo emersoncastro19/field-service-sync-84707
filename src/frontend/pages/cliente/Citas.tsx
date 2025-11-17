@@ -108,7 +108,7 @@ export default function ClienteCitas() {
         .from('citas')
         .select('*')
         .in('id_orden', ordenIds)
-        .order('fecha_programada', { ascending: true });
+        .order('fecha_programada', { ascending: false });
 
       if (citasError) throw citasError;
 
@@ -222,11 +222,50 @@ export default function ClienteCitas() {
               id_destinatario: idUsuarioTecnico,
               tipo_notificacion: 'Cita Confirmada por Cliente',
               canal: 'Sistema_Interno',
-              mensaje: `El cliente ha confirmado la cita para la orden ${cita.orden.numero_orden}. La fecha programada es ${formatearSoloFechaVenezuela(cita.fecha_programada)} a las ${formatearHoraVenezuela(cita.fecha_programada)}.`,
+              mensaje: `El cliente ha confirmado la cita. La fecha programada es ${formatearSoloFechaVenezuela(cita.fecha_programada)} a las ${formatearHoraVenezuela(cita.fecha_programada)}.`,
               fecha_enviada: fechaActual,
               leida: false
             }
           ]);
+      }
+
+      // Obtener todos los coordinadores activos para notificarles
+      const { data: coordinadoresData, error: coordinadoresError } = await supabase
+        .from('usuarios')
+        .select('id_usuario')
+        .eq('tipo_usuario', 'Coordinador')
+        .eq('estado', 'Activo');
+
+      // Crear notificaciones para todos los coordinadores activos
+      if (coordinadoresData && coordinadoresData.length > 0) {
+        const notificacionesCoordinadores = coordinadoresData
+          .filter(coord => coord.id_usuario != null)
+          .map(coord => {
+            const idDestinatario = typeof coord.id_usuario === 'string' 
+              ? parseInt(coord.id_usuario, 10) 
+              : coord.id_usuario;
+            
+            return {
+              id_orden: cita.id_orden,
+              id_destinatario: Number(idDestinatario),
+              tipo_notificacion: 'Cita Confirmada por Cliente',
+              canal: 'Sistema_Interno',
+              mensaje: `El cliente ha confirmado la cita. La fecha programada es ${formatearSoloFechaVenezuela(cita.fecha_programada)} a las ${formatearHoraVenezuela(cita.fecha_programada)}.`,
+              fecha_enviada: fechaActual,
+              leida: false
+            };
+          });
+
+        if (notificacionesCoordinadores.length > 0) {
+          const { error: notifError } = await supabase
+            .from('notificaciones')
+            .insert(notificacionesCoordinadores);
+
+          if (notifError) {
+            console.error('Error enviando notificaciones a coordinadores:', notifError);
+            // No lanzamos error, solo lo registramos para no bloquear el flujo
+          }
+        }
       }
 
       // Log de auditoría
@@ -248,7 +287,7 @@ export default function ClienteCitas() {
           ]);
       }
 
-      success('Cita confirmada', 'Has confirmado la fecha programada. El técnico ha sido notificado.');
+      success('Cita confirmada', 'Has confirmado la fecha programada. El técnico y el coordinador han sido notificados.');
       await cargarCitas();
     } catch (err: any) {
       console.error('Error confirmando cita:', err);
@@ -317,7 +356,7 @@ export default function ClienteCitas() {
                 id_destinatario: coordinadorData.id_usuario,
                 tipo_notificacion: 'Solicitud de Reprogramación',
                 canal: 'Sistema_Interno',
-                mensaje: `El cliente ha solicitado reprogramar la cita de la orden ${cita.orden.numero_orden}. Nueva fecha solicitada: ${formatearSoloFechaVenezuela(nuevaFechaProgramada)} a las ${formatearHoraVenezuela(nuevaFechaProgramada)}. Motivo: ${motivoReprogramacion.trim()}`,
+                mensaje: `El cliente ha solicitado reprogramar la cita. Nueva fecha solicitada: ${formatearSoloFechaVenezuela(nuevaFechaProgramada)} a las ${formatearHoraVenezuela(nuevaFechaProgramada)}. Motivo: ${motivoReprogramacion.trim()}`,
                 fecha_enviada: fechaActual,
                 leida: false
               }
@@ -537,108 +576,109 @@ export default function ClienteCitas() {
                     {cita.estado_cita !== 'Programada' && cita.estado_cita !== 'Propuesta' && cita.estado_cita !== 'Pendiente de Confirmación' && cita.estado_cita !== 'Reprogramada' && cita.estado_cita !== 'Solic Reprogram' && cita.estado_cita !== 'Solicitud de Reprogramación' && (
                       <div className="flex gap-2 pt-3">
                         {cita.estado_cita !== 'Completada' && cita.estado_cita !== 'Cancelada' && cita.estado_cita !== 'Confirmada' && (
-                          <Dialog open={dialogReprogramacion.open && dialogReprogramacion.cita?.id_cita === cita.id_cita} onOpenChange={(open) => {
-                            if (!open) {
-                              setDialogReprogramacion({ open: false, cita: null });
-                              setNuevaFechaCita("");
-                              setNuevaHoraCita("");
-                              setMotivoReprogramacion("");
-                            }
-                          }}>
-                            <DialogTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                className="flex-1" 
-                                onClick={() => {
-                                  setDialogReprogramacion({ open: true, cita });
-                                  // Establecer fecha por defecto
-                                  const fechaActual = new Date(parseInt(new Date(cita.fecha_programada).getTime().toString()));
-                                  fechaActual.setDate(fechaActual.getDate() + 3);
-                                  setNuevaFechaCita(fechaActual.toISOString().split('T')[0]);
-                                  setNuevaHoraCita("10:00");
-                                }}
-                              >
-                                <Calendar className="mr-2 h-4 w-4" />
-                                Reprogramar
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Solicitar Reprogramación de Cita</DialogTitle>
-                                <DialogDescription>
-                                  Selecciona una nueva fecha y especifica el motivo de la reprogramación
-                                </DialogDescription>
-                              </DialogHeader>
-                              <div className="space-y-4 pt-4">
-                                <div className="space-y-2">
-                                  <Label htmlFor="new-date">Nueva Fecha</Label>
-                                  <Input 
-                                    id="new-date" 
-                                    type="date" 
-                                    value={nuevaFechaCita}
-                                    onChange={(e) => setNuevaFechaCita(e.target.value)}
-                                    min={new Date().toISOString().split('T')[0]}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="new-time">Nueva Hora</Label>
-                                  <Input 
-                                    id="new-time" 
-                                    type="time" 
-                                    value={nuevaHoraCita}
-                                    onChange={(e) => setNuevaHoraCita(e.target.value)}
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label htmlFor="reason">Motivo de Reprogramación *</Label>
-                                  <Textarea 
-                                    id="reason" 
-                                    placeholder="Explica por qué necesitas reprogramar la cita..."
-                                    value={motivoReprogramacion}
-                                    onChange={(e) => setMotivoReprogramacion(e.target.value)}
-                                    rows={3}
-                                  />
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button 
-                                    variant="outline" 
-                                    className="flex-1"
-                                    onClick={() => {
-                                      setDialogReprogramacion({ open: false, cita: null });
-                                      setNuevaFechaCita("");
-                                      setNuevaHoraCita("");
-                                      setMotivoReprogramacion("");
-                                    }}
-                                  >
-                                    Cancelar
-                                  </Button>
-                                  <Button 
-                                    className="flex-1"
-                                    onClick={solicitarReprogramacion}
-                                    disabled={procesando[cita.id_cita] || !nuevaFechaCita || !nuevaHoraCita || !motivoReprogramacion.trim()}
-                                  >
-                                    {procesando[cita.id_cita] ? (
-                                      <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Enviando...
-                                      </>
-                                    ) : (
-                                      'Enviar Solicitud'
-                                    )}
-                                  </Button>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
+                          <Button 
+                            variant="outline" 
+                            className="flex-1" 
+                            onClick={() => {
+                              setDialogReprogramacion({ open: true, cita });
+                              // Establecer fecha por defecto
+                              const fechaActual = new Date(parseInt(new Date(cita.fecha_programada).getTime().toString()));
+                              fechaActual.setDate(fechaActual.getDate() + 3);
+                              setNuevaFechaCita(fechaActual.toISOString().split('T')[0]);
+                              setNuevaHoraCita("10:00");
+                            }}
+                          >
+                            <Calendar className="mr-2 h-4 w-4" />
+                            Reprogramar
+                          </Button>
                         )}
-                        <Button variant="ghost" asChild>
-                          <Link to={`/cliente/detalles-orden?id=${cita.id_orden}`}>
-                            Ver Detalles
-                          </Link>
+                        // ... existing code ...
+                    </div>
+                  )}
+                </CardContent>
+                
+                {/* Diálogo global de reprogramación */}
+                <Dialog
+                  open={dialogReprogramacion.open && dialogReprogramacion.cita?.id_cita === cita.id_cita}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setDialogReprogramacion({ open: false, cita: null });
+                      setNuevaFechaCita("");
+                      setNuevaHoraCita("");
+                      setMotivoReprogramacion("");
+                    }
+                  }}
+                >
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Solicitar Reprogramación de Cita</DialogTitle>
+                      <DialogDescription>
+                        Selecciona una nueva fecha y especifica el motivo de la reprogramación
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="new-date">Nueva Fecha</Label>
+                        <Input 
+                          id="new-date" 
+                          type="date" 
+                          value={nuevaFechaCita}
+                          onChange={(e) => setNuevaFechaCita(e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="new-time">Nueva Hora</Label>
+                        <Input 
+                          id="new-time" 
+                          type="time" 
+                          value={nuevaHoraCita}
+                          onChange={(e) => setNuevaHoraCita(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="reason">Motivo de Reprogramación *</Label>
+                        <Textarea 
+                          id="reason" 
+                          placeholder="Explica por qué necesitas reprogramar la cita..."
+                          value={motivoReprogramacion}
+                          onChange={(e) => setMotivoReprogramacion(e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          className="flex-1"
+                          onClick={() => {
+                            setDialogReprogramacion({ open: false, cita: null });
+                            setNuevaFechaCita("");
+                            setNuevaHoraCita("");
+                            setMotivoReprogramacion("");
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button 
+                          className="flex-1"
+                          onClick={solicitarReprogramacion}
+                          disabled={
+                            (dialogReprogramacion.cita ? !!procesando[dialogReprogramacion.cita.id_cita] : false) ||
+                            !nuevaFechaCita || !nuevaHoraCita || !motivoReprogramacion.trim()
+                          }
+                        >
+                          {dialogReprogramacion.cita && procesando[dialogReprogramacion.cita.id_cita] ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Enviando...
+                            </>
+                          ) : (
+                            'Enviar Solicitud'
+                          )}
                         </Button>
                       </div>
-                    )}
-                  </div>
+                    </DialogContent>
+                  </Dialog>
                 </CardContent>
               </Card>
             ))}

@@ -21,7 +21,6 @@ interface ClienteResultado {
   referencias_ubicacion: string | null;
   tipo_cliente: string;
   estado_cuenta: string;
-  plan_actual: string | null;
   usuario: {
     id_usuario: number;
     nombre_completo: string;
@@ -80,8 +79,7 @@ export default function BuscarCliente() {
             direccion_servicio,
             referencias_ubicacion,
             tipo_cliente,
-            estado_cuenta,
-            plan_actual
+            estado_cuenta
           )
         `)
         .or(`nombre_completo.ilike.%${terminoBusqueda}%,email.ilike.%${terminoBusqueda}%,telefono.ilike.%${terminoBusqueda}%,username.ilike.%${terminoBusqueda}%`)
@@ -106,7 +104,6 @@ export default function BuscarCliente() {
           referencias_ubicacion,
           tipo_cliente,
           estado_cuenta,
-          plan_actual,
           usuarios!inner (
             id_usuario,
             nombre_completo,
@@ -378,10 +375,10 @@ export default function BuscarCliente() {
         {/* Resultados de búsqueda */}
         {resultados.length > 0 && !clienteSeleccionado && (
           <Card>
-            <CardHeader>
+                <CardHeader>
               <CardTitle>Resultados de Búsqueda ({resultados.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
+                </CardHeader>
+                <CardContent>
           <div className="space-y-4">
                 {resultados.map((cliente) => (
                   <Card 
@@ -411,12 +408,12 @@ export default function BuscarCliente() {
                             <div className="flex items-center gap-2">
                               <Hash className="h-4 w-4" />
                               <span>{cliente.tipo_identificacion}: {cliente.identificacion}</span>
-                            </div>
+                    </div>
                             <div className="flex items-center gap-2">
                               <FileText className="h-4 w-4" />
                               <span>{cliente.ordenes_count || 0} orden(es) - {cliente.ordenes_activas || 0} activa(s)</span>
-                            </div>
-                          </div>
+                    </div>
+                    </div>
                         </div>
                         <Button 
                           variant="outline" 
@@ -429,11 +426,11 @@ export default function BuscarCliente() {
                           <Eye className="h-4 w-4 mr-2" />
                           Ver Detalles
                         </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
             </CardContent>
           </Card>
         )}
@@ -543,8 +540,6 @@ export default function BuscarCliente() {
                       </div>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Plan Actual</p>
-                      <p className="font-medium">{clienteSeleccionado.plan_actual || 'Sin plan asignado'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Total de Órdenes</p>

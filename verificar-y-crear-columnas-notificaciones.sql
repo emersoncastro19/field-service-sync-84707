@@ -177,3 +177,7 @@ FROM notificaciones;
 -- Para hacerlo, ve a Settings > API en tu proyecto de Supabase y haz clic en "Reload schema cache"
 -- O simplemente espera unos minutos y el cache se actualizará automáticamente
 
+
+
+
+

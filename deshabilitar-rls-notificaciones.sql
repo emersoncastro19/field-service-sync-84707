@@ -77,3 +77,12 @@ WHERE tablename = 'notificaciones';
 -- 2. Intenta asignar una orden nuevamente
 -- 3. Debería funcionar sin el error 42501
 
+
+
+
+
+
+
+
+
+

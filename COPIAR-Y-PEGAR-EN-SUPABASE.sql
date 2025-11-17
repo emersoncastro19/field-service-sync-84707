@@ -45,3 +45,12 @@ WHERE tablename = 'notificaciones';
 -- - rls_enabled = false
 -- - total_politicas = 0
 
+
+
+
+
+
+
+
+
+

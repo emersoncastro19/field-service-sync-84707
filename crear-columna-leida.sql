@@ -85,3 +85,7 @@ FROM notificaciones;
 -- ALTER TABLE notificaciones ALTER COLUMN leida SET DEFAULT FALSE;
 -- ALTER TABLE notificaciones ALTER COLUMN leida SET NOT NULL;
 
+
+
+
+

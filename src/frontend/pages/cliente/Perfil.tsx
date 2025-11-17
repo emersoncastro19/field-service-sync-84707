@@ -37,7 +37,6 @@ interface PerfilData {
   referencias_ubicacion: string;
   tipo_cliente: string;
   estado_cuenta: string;
-  plan_actual: string;
 }
 
 export default function Perfil() {
@@ -104,8 +103,7 @@ export default function Perfil() {
             direccion_servicio,
             referencias_ubicacion,
             tipo_cliente,
-            estado_cuenta,
-            plan_actual
+            estado_cuenta
           )
         `)
         .eq('id_usuario', idUsuario)
@@ -129,7 +127,6 @@ export default function Perfil() {
         referencias_ubicacion: clienteData.referencias_ubicacion || '',
         tipo_cliente: clienteData.tipo_cliente,
         estado_cuenta: clienteData.estado_cuenta,
-        plan_actual: clienteData.plan_actual || 'Sin plan asignado'
       };
 
       setPerfil(perfilData);
@@ -596,8 +593,6 @@ export default function Perfil() {
                   <Input id="client-type" value={perfil.tipo_cliente} disabled />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="plan">Plan Actual</Label>
-                  <Input id="plan" value={perfil.plan_actual} disabled />
                 </div>
               </div>
 

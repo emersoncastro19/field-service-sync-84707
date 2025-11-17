@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabaseClient'
 import { Usuario, LoginData, RegistroData, MAX_LOGIN_ATTEMPTS } from '@/shared/types'
 import bcrypt from 'bcryptjs'
+import { enviarEmail, generarEmailRecuperacionContraseña } from './emailService'
 
 // Registro de usuario
 export const registrarUsuario = async (nuevoUsuario: RegistroData) => {
@@ -100,7 +101,6 @@ export const registrarUsuario = async (nuevoUsuario: RegistroData) => {
           referencias_ubicacion: nuevoUsuario.referencias_ubicacion || null,
           tipo_cliente: nuevoUsuario.tipo_cliente || 'Residencial',
           estado_cuenta: 'Activo',
-          plan_actual: null
         }
       ])
 
@@ -321,6 +321,9 @@ export const obtenerUsuarioActual = (): Usuario | null => {
 
 // 🔑 Solicitar recuperación de contraseña
 export const solicitarRecuperacionContraseña = async (email: string) => {
+  console.log('🔑 Iniciando recuperación de contraseña para:', email);
+  
+  // 1. Buscar usuario por email
   const { data, error } = await supabase
     .from('usuarios')
     .select('id_usuario, email, nombre_completo')
@@ -328,35 +331,96 @@ export const solicitarRecuperacionContraseña = async (email: string) => {
     .single()
 
   if (error || !data) {
+    console.error('❌ Usuario no encontrado:', error);
     throw new Error('Email no encontrado')
   }
 
-  // Generar token de recuperación (en un caso real, esto se enviaría por email)
-  const token = Math.random().toString(36).substr(2, 15)
+  console.log('✅ Usuario encontrado:', data.email);
+
+  // 2. Generar token de recuperación (código de 6 dígitos)
+  const token = Math.floor(100000 + Math.random() * 900000).toString();
   
-  // Guardar token en la base de datos (podrías crear una tabla tokens_recuperacion)
-  // Por ahora, lo guardamos en una columna temporal o en localStorage
-  localStorage.setItem(`recovery_token_${email}`, token)
+  // 3. Guardar token en localStorage con expiración de 1 hora
+  const tokenData = {
+    token,
+    email: data.email,
+    timestamp: Date.now(),
+    expiresAt: Date.now() + (60 * 60 * 1000) // 1 hora
+  };
+  
+  localStorage.setItem(`recovery_token_${email}`, JSON.stringify(tokenData));
+  console.log('✅ Token guardado:', token);
+  
+  // 4. Generar plantilla de email
+  const emailData = generarEmailRecuperacionContraseña(
+    data.nombre_completo || 'Usuario',
+    token,
+    data.email
+  );
+
+  // 5. Enviar email con el token
+  try {
+    console.log('📧 Enviando email de recuperación...');
+    await enviarEmail(emailData);
+    console.log('✅ Email enviado exitosamente');
+  } catch (emailError: any) {
+    console.error('❌ Error enviando email:', emailError);
+    // Limpiar token si falla el envío
+    localStorage.removeItem(`recovery_token_${email}`);
+    throw new Error(`No se pudo enviar el email: ${emailError.message}. Por favor, verifica la configuración del servicio de email o contacta al administrador.`);
+  }
   
   return {
     email: data.email,
     nombre: data.nombre_completo,
-    token: token
+    token: token // Devolver token para testing (en producción, no debería devolverse)
   }
 }
 
 // 🔑 Cambiar contraseña con token
 export const cambiarContraseñaConToken = async (email: string, token: string, nuevaContraseña: string) => {
-  // Verificar token
-  const tokenGuardado = localStorage.getItem(`recovery_token_${email}`)
-  if (!tokenGuardado || tokenGuardado !== token) {
+  console.log('🔑 Cambiando contraseña con token para:', email);
+  
+  // 1. Verificar token
+  const tokenDataStr = localStorage.getItem(`recovery_token_${email}`)
+  if (!tokenDataStr) {
+    console.error('❌ Token no encontrado en localStorage');
+    throw new Error('Token de recuperación no encontrado o expirado')
+  }
+
+  let tokenData;
+  try {
+    tokenData = JSON.parse(tokenDataStr);
+  } catch {
+    // Compatibilidad con formato antiguo (solo token como string)
+    const oldToken = tokenDataStr;
+    if (oldToken !== token) {
+      throw new Error('Token de recuperación inválido');
+    }
+    // Si coincide, proceder (pero sin validación de expiración)
+    tokenData = { token: oldToken, timestamp: Date.now(), expiresAt: Date.now() + (60 * 60 * 1000) };
+  }
+
+  // 2. Verificar que el token coincida
+  if (tokenData.token !== token) {
+    console.error('❌ Token no coincide');
     throw new Error('Token de recuperación inválido')
   }
 
-  // Encriptar nueva contraseña
+  // 3. Verificar expiración
+  const now = Date.now();
+  if (tokenData.expiresAt && now > tokenData.expiresAt) {
+    console.error('❌ Token expirado');
+    localStorage.removeItem(`recovery_token_${email}`);
+    throw new Error('Token de recuperación expirado. Por favor, solicita uno nuevo.')
+  }
+
+  console.log('✅ Token válido, procediendo a cambiar contraseña');
+
+  // 4. Encriptar nueva contraseña
   const hashed = await hashPassword(nuevaContraseña)
 
-  // Actualizar contraseña
+  // 5. Actualizar contraseña en la base de datos
   const { error } = await supabase
     .from('usuarios')
     .update({ 
@@ -366,9 +430,14 @@ export const cambiarContraseñaConToken = async (email: string, token: string, n
     })
     .eq('email', email)
 
-  if (error) throw error
+  if (error) {
+    console.error('❌ Error actualizando contraseña:', error);
+    throw new Error('Error al actualizar la contraseña: ' + error.message)
+  }
 
-  // Limpiar token
+  console.log('✅ Contraseña actualizada exitosamente');
+
+  // 6. Limpiar token
   localStorage.removeItem(`recovery_token_${email}`)
   
   return true

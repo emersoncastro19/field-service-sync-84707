@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/frontend/components/ui/tabs";
 import { 
   Play, Square, Camera, FileText, CheckCircle, Clock, User, MapPin, 
-  AlertCircle, Upload, X, Loader2, Wrench
+  AlertCircle, Upload, X, Loader2, Wrench, Pencil
 } from "lucide-react";
 import { supabase } from "@/backend/config/supabaseClient";
 import { useAuth } from "@/frontend/context/AuthContext";
@@ -37,7 +37,7 @@ interface Orden {
     fecha_fin: string | null;
     trabajo_realizado: string | null;
     estado_resultado: string;
-    repuestos_utilizados?: string | null;
+    equipos_utilizados?: string | null;
     recomendaciones?: string | null;
   };
   cita?: {
@@ -69,11 +69,12 @@ export default function GestionarEjecucion() {
 
   // Estados para cada orden (usando Map para manejar múltiples órdenes)
   const [trabajoRealizado, setTrabajoRealizado] = useState<Record<number, string>>({});
-  const [repuestosUtilizados, setRepuestosUtilizados] = useState<Record<number, string>>({});
+  const [equiposUtilizados, setEquiposUtilizados] = useState<Record<number, string>>({});
   const [recomendaciones, setRecomendaciones] = useState<Record<number, string>>({});
   const [imagenes, setImagenes] = useState<Record<number, File[]>>({});
   const [imagenesPreview, setImagenesPreview] = useState<Record<number, string[]>>({});
   const [subiendoImagenes, setSubiendoImagenes] = useState<Record<number, boolean>>({});
+  const [modoEdicionDocumentacion, setModoEdicionDocumentacion] = useState<Record<number, boolean>>({});
   
   // Estados para reportar impedimentos
   const [tipoImpedimento, setTipoImpedimento] = useState<Record<number, string>>({});
@@ -143,6 +144,61 @@ export default function GestionarEjecucion() {
         ejecucionesData = ejecuciones || [];
       }
 
+      // 3.5. Obtener imágenes de estas ejecuciones
+      let imagenesData: any[] = [];
+      const ejecucionIds = ejecucionesData.map((e: any) => e.id_ejecucion);
+      
+      if (ejecucionIds.length > 0) {
+        // Intentar cargar desde tabla imagenes_servicio
+        const { data: imagenes, error: imagenesError } = await supabase
+          .from('imagenes_servicio')
+          .select('*')
+          .in('id_ejecucion', ejecucionIds);
+        
+        if (imagenesError) {
+          console.warn('⚠️ Error cargando desde imagenes_servicio:', imagenesError);
+        }
+        
+        if (imagenes && imagenes.length > 0) {
+          console.log(`✅ ${imagenes.length} imagen(es) cargada(s) desde imagenes_servicio`);
+          
+          // Eliminar duplicados por URL (por si acaso)
+          const urlsUnicas = new Set<string>();
+          imagenesData = imagenes.filter((img: any) => {
+            if (urlsUnicas.has(img.url_imagen)) {
+              return false; // Duplicado, omitir
+            }
+            urlsUnicas.add(img.url_imagen);
+            return true;
+          });
+          
+          if (imagenes.length !== imagenesData.length) {
+            console.log(`ℹ️ Se eliminaron ${imagenes.length - imagenesData.length} imagen(es) duplicada(s)`);
+          }
+        } else {
+          console.log('ℹ️ No hay imágenes en imagenes_servicio, intentando desde ejecuciones_servicio.imagenes_urls...');
+          // Si no hay tabla imagenes_servicio, intentar desde ejecuciones_servicio (campo JSON)
+          ejecucionesData.forEach((ejecucion: any) => {
+            if (ejecucion.imagenes_urls && Array.isArray(ejecucion.imagenes_urls)) {
+              // Eliminar duplicados del array JSON
+              const urlsUnicas = Array.from(new Set(ejecucion.imagenes_urls));
+              console.log(`✅ Encontradas ${urlsUnicas.length} imagen(es) únicas en imagenes_urls para ejecución ${ejecucion.id_ejecucion}`);
+              urlsUnicas.forEach((url: string, index: number) => {
+                imagenesData.push({
+                  id_imagen: index + 1,
+                  id_ejecucion: ejecucion.id_ejecucion,
+                  id_orden: ejecucion.id_orden,
+                  url_imagen: url,
+                  descripcion: null
+                });
+              });
+            }
+          });
+        }
+        
+        console.log(`📊 Total de imágenes cargadas: ${imagenesData.length}`);
+      }
+
       // 4. Obtener citas de estas órdenes
       let citasData: any[] = [];
       if (ordenIds.length > 0) {
@@ -210,8 +266,11 @@ export default function GestionarEjecucion() {
           .filter((c: any) => c.id_orden === orden.id_orden)
           .sort((a: any, b: any) => parsearFechaUTC(b.fecha_programada).getTime() - parsearFechaUTC(a.fecha_programada).getTime())[0];
         
-        // Parsear trabajo_realizado para extraer repuestos y recomendaciones si existen
-        let repuestos = '';
+        // Obtener imágenes de esta ejecución
+        const imagenesEjecucion = imagenesData.filter((img: any) => img.id_ejecucion === ejecucion?.id_ejecucion);
+        
+        // Parsear trabajo_realizado para extraer equipos y recomendaciones si existen
+        let equipos = '';
         let recomendaciones = '';
         let trabajoRealizadoTexto = ejecucion?.trabajo_realizado || '';
         
@@ -220,8 +279,8 @@ export default function GestionarEjecucion() {
           trabajoRealizadoTexto = partes[0] || '';
           
           partes.forEach((parte: string) => {
-            if (parte.startsWith('Repuestos Utilizados:')) {
-              repuestos = parte.replace('Repuestos Utilizados:', '').trim();
+            if (parte.startsWith('Equipos Utilizados:')) {
+              equipos = parte.replace('Equipos Utilizados:', '').trim();
             } else if (parte.startsWith('Recomendaciones:')) {
               recomendaciones = parte.replace('Recomendaciones:', '').trim();
             }
@@ -245,9 +304,9 @@ export default function GestionarEjecucion() {
             id_ejecucion: ejecucion.id_ejecucion,
             fecha_inicio: ejecucion.fecha_inicio,
             fecha_fin: ejecucion.fecha_fin,
-            trabajo_realizado: trabajoRealizadoTexto,
+            trabajo_realizado: ejecucion.trabajo_realizado, // Mantener el texto completo para el parsing
             estado_resultado: ejecucion.estado_resultado,
-            repuestos_utilizados: repuestos,
+            equipos_utilizados: equipos,
             recomendaciones: recomendaciones
           } : undefined,
           cita: citaOrden ? {
@@ -261,6 +320,11 @@ export default function GestionarEjecucion() {
             descripcion: imp.descripcion,
             estado_resolucion: imp.estado_resolucion,
             fecha_reporte: imp.fecha_reporte || imp.fecha_creacion || new Date().toISOString()
+          })) : undefined,
+          imagenes: imagenesEjecucion.length > 0 ? imagenesEjecucion.map((img: any) => ({
+            id_imagen: img.id_imagen,
+            url_imagen: img.url_imagen,
+            descripcion: img.descripcion
           })) : undefined
         };
       });
@@ -268,17 +332,44 @@ export default function GestionarEjecucion() {
       // 6. Inicializar estados con los datos cargados
       ordenesFormateadas.forEach(orden => {
         if (orden.ejecucion) {
+          // Parsear trabajo_realizado para extraer las partes si existe
+          let trabajoTexto = '';
+          let equiposTexto = '';
+          let recomendacionesTexto = '';
+          
+          if (orden.ejecucion.trabajo_realizado) {
+            const partes = orden.ejecucion.trabajo_realizado.split('\n\n');
+            trabajoTexto = partes[0] || '';
+            
+            partes.forEach((parte: string) => {
+              if (parte.startsWith('Equipos Utilizados:')) {
+                equiposTexto = parte.replace('Equipos Utilizados:', '').trim();
+              } else if (parte.startsWith('Recomendaciones:')) {
+                recomendacionesTexto = parte.replace('Recomendaciones:', '').trim();
+              }
+            });
+          }
+          
           setTrabajoRealizado(prev => ({
             ...prev,
-            [orden.id_orden]: orden.ejecucion?.trabajo_realizado || ''
+            [orden.id_orden]: trabajoTexto
           }));
-          setRepuestosUtilizados(prev => ({
+          setEquiposUtilizados(prev => ({
             ...prev,
-            [orden.id_orden]: orden.ejecucion?.repuestos_utilizados || ''
+            [orden.id_orden]: equiposTexto
           }));
           setRecomendaciones(prev => ({
             ...prev,
-            [orden.id_orden]: orden.ejecucion?.recomendaciones || ''
+            [orden.id_orden]: recomendacionesTexto
+          }));
+          
+          // Si ya hay documentación guardada, la orden está completada, o el trabajo fue finalizado (fecha_fin no null), iniciar en modo solo lectura
+          const tieneDocumentacion = orden.ejecucion?.trabajo_realizado && orden.ejecucion.trabajo_realizado.trim().length > 0;
+          const ordenCompletada = orden.estado === 'Completada';
+          const trabajoFinalizado = orden.ejecucion?.fecha_fin !== null && orden.ejecucion?.fecha_fin !== undefined;
+          setModoEdicionDocumentacion(prev => ({
+            ...prev,
+            [orden.id_orden]: !tieneDocumentacion && !ordenCompletada && !trabajoFinalizado // Solo permitir edición si no hay documentación, no está completada Y no está finalizada
           }));
         }
       });
@@ -458,7 +549,7 @@ export default function GestionarEjecucion() {
           id_destinatario: idUsuarioCliente,
           tipo_notificacion: 'Trabajo Iniciado',
           canal: 'Sistema_Interno',
-          mensaje: `El técnico ha iniciado el trabajo en tu orden ${orden.numero_orden}.`,
+          mensaje: `El técnico ha iniciado el trabajo.`,
           fecha_enviada: fechaActualInicio,
           leida: false
         });
@@ -471,7 +562,7 @@ export default function GestionarEjecucion() {
           id_destinatario: idUsuarioCoordinador,
           tipo_notificacion: 'Trabajo Iniciado',
           canal: 'Sistema_Interno',
-          mensaje: `El técnico ${nombreTecnico} ha iniciado el trabajo en la orden ${orden.numero_orden}.`,
+          mensaje: `El técnico ${nombreTecnico} ha iniciado el trabajo.`,
           fecha_enviada: fechaActualInicio,
           leida: false
         });
@@ -530,11 +621,11 @@ export default function GestionarEjecucion() {
     try {
       // Combinar toda la documentación del tab "Documentar"
       let documentacionCompleta = trabajo.trim();
-      const repuestos = repuestosUtilizados[orden.id_orden] || '';
+      const equipos = equiposUtilizados[orden.id_orden] || '';
       const recom = recomendaciones[orden.id_orden] || '';
       
-      if (repuestos.trim()) {
-        documentacionCompleta += `\n\nRepuestos Utilizados:\n${repuestos.trim()}`;
+      if (equipos.trim()) {
+        documentacionCompleta += `\n\nEquipos Utilizados:\n${equipos.trim()}`;
       }
       
       if (recom.trim()) {
@@ -546,6 +637,9 @@ export default function GestionarEjecucion() {
       if (imagenesOrden.length > 0) {
         try {
           await subirImagenes(orden.id_orden, orden.ejecucion.id_ejecucion, imagenesOrden);
+          // Limpiar el estado de imágenes DESPUÉS de subirlas para evitar que se suban de nuevo
+          setImagenes(prev => ({ ...prev, [orden.id_orden]: [] }));
+          setImagenesPreview(prev => ({ ...prev, [orden.id_orden]: [] }));
         } catch (err) {
           // No lanzamos el error, solo lo registramos - el proceso continúa
           console.warn('⚠️ Advertencia: No se pudieron subir algunas imágenes, pero el proceso continuará:', err);
@@ -607,7 +701,7 @@ export default function GestionarEjecucion() {
                 id_destinatario: idUsuarioCliente,
                 tipo_notificacion: 'Servicio Completado',
                 canal: 'Sistema_Interno',
-                mensaje: `El técnico ha completado el trabajo en tu orden ${orden.numero_orden}. Por favor confirma si el servicio fue realizado satisfactoriamente.`,
+                mensaje: `El técnico ha completado el trabajo. Por favor confirma si el servicio fue realizado satisfactoriamente.`,
                 fecha_enviada: obtenerFechaActualVenezuelaUTC(),
                 leida: false
               }
@@ -647,7 +741,7 @@ export default function GestionarEjecucion() {
       
       // Limpiar estados
       setTrabajoRealizado(prev => ({ ...prev, [orden.id_orden]: '' }));
-      setRepuestosUtilizados(prev => ({ ...prev, [orden.id_orden]: '' }));
+      setEquiposUtilizados(prev => ({ ...prev, [orden.id_orden]: '' }));
       setRecomendaciones(prev => ({ ...prev, [orden.id_orden]: '' }));
       setImagenes(prev => ({ ...prev, [orden.id_orden]: [] }));
       setImagenesPreview(prev => ({ ...prev, [orden.id_orden]: [] }));
@@ -662,6 +756,12 @@ export default function GestionarEjecucion() {
   };
 
   const subirImagenes = async (idOrden: number, idEjecucion: number, archivos: File[]) => {
+    // Si no hay archivos, no hacer nada
+    if (!archivos || archivos.length === 0) {
+      console.log('ℹ️ No hay archivos para subir');
+      return;
+    }
+
     setSubiendoImagenes(prev => ({ ...prev, [idOrden]: true }));
     
     try {
@@ -674,7 +774,16 @@ export default function GestionarEjecucion() {
       
       for (const archivo of archivos) {
         try {
-          const nombreArchivo = `${idOrden}_${idEjecucion}_${Date.now()}_${archivo.name}`;
+          // Limpiar el nombre del archivo para evitar caracteres especiales
+          const nombreLimpio = archivo.name
+            .replace(/[^a-zA-Z0-9.-]/g, '_') // Reemplazar caracteres especiales con guión bajo
+            .replace(/\s+/g, '_'); // Reemplazar espacios con guión bajo
+          
+          // Generar nombre único usando timestamp + índice para evitar duplicados
+          // El timestamp asegura que cada subida sea única, pero la verificación de BD previene duplicados reales
+          const timestamp = Date.now();
+          const indice = archivos.indexOf(archivo);
+          const nombreArchivo = `${idOrden}_${idEjecucion}_${timestamp}_${indice}_${nombreLimpio}`;
           const ruta = `orden-${idOrden}/${nombreArchivo}`;
           
           const { data, error: uploadError } = await supabase.storage
@@ -714,8 +823,113 @@ export default function GestionarEjecucion() {
       if (urls.length > 0) {
         console.log(`✅ ${urls.length} imagen(es) subida(s) correctamente`);
         
-        // TODO: Guardar URLs en ejecuciones_servicio (como JSON en un campo de texto o crear tabla separada)
-        // Por ahora, solo mostramos éxito
+        // Guardar URLs en la tabla imagenes_servicio (o ejecuciones_servicio si no existe la tabla)
+        try {
+          // Primero verificar si ya existen imágenes para esta ejecución para evitar duplicados
+          const { data: imagenesExistentes } = await supabase
+            .from('imagenes_servicio')
+            .select('url_imagen, id_imagen')
+            .eq('id_ejecucion', idEjecucion)
+            .eq('id_orden', idOrden);
+
+          // Filtrar URLs que ya existen para evitar duplicados
+          // Normalizar URLs para comparación (remover parámetros de query y fragmentos)
+          const urlsExistentes = imagenesExistentes?.map(img => {
+            const urlNormalizada = img.url_imagen.split('?')[0].split('#')[0];
+            // Extraer el nombre del archivo de la URL para comparación más precisa
+            const nombreArchivo = urlNormalizada.split('/').pop() || '';
+            return { url: img.url_imagen, urlNormalizada, nombreArchivo };
+          }) || [];
+          
+          const urlsNuevas = urls.filter(url => {
+            const urlNormalizada = url.split('?')[0].split('#')[0];
+            // Extraer solo el nombre del archivo original (sin timestamp e índice)
+            // Formato: orden_X_X_timestamp_indice_nombreLimpio
+            const partesNombre = urlNormalizada.split('/').pop()?.split('_') || [];
+            // Si tiene al menos 5 partes (orden, idOrden, idEjecucion, timestamp, indice, nombre), extraer el nombre original
+            const nombreOriginal = partesNombre.length >= 5 
+              ? partesNombre.slice(5).join('_') // Todo después del índice
+              : urlNormalizada.split('/').pop() || '';
+            
+            // Verificar si ya existe una imagen con el mismo nombre original para esta ejecución
+            const yaExiste = urlsExistentes.some(existente => {
+              const partesExistente = existente.nombreArchivo.split('_') || [];
+              const nombreOriginalExistente = partesExistente.length >= 5
+                ? partesExistente.slice(5).join('_')
+                : existente.nombreArchivo;
+              
+              // Si los nombres originales son iguales, es el mismo archivo (duplicado)
+              if (nombreOriginal === nombreOriginalExistente && nombreOriginal !== '') {
+                return true;
+              }
+              
+              // También comparar URLs completas normalizadas por si acaso
+              if (urlNormalizada === existente.urlNormalizada) {
+                return true;
+              }
+              
+              return false;
+            });
+            
+            return !yaExiste;
+          });
+
+          if (urlsNuevas.length > 0) {
+            // Intentar insertar solo las URLs nuevas en tabla imagenes_servicio
+            const imagenesParaInsertar = urlsNuevas.map((url) => ({
+              id_ejecucion: idEjecucion,
+              id_orden: idOrden,
+              url_imagen: url,
+              descripcion: null,
+              fecha_subida: new Date().toISOString()
+            }));
+
+            const { error: insertError } = await supabase
+              .from('imagenes_servicio')
+              .insert(imagenesParaInsertar);
+
+            if (insertError) {
+              console.warn('⚠️ No se pudieron guardar las URLs en imagenes_servicio:', insertError);
+              console.log('🔄 Intentando guardar en ejecuciones_servicio.imagenes_urls como fallback...');
+              
+              // Si la tabla no existe, intentar guardar como JSON en ejecuciones_servicio
+              const { data: ejecucionData, error: selectError } = await supabase
+                .from('ejecuciones_servicio')
+                .select('imagenes_urls')
+                .eq('id_ejecucion', idEjecucion)
+                .single();
+
+              if (selectError) {
+                console.error('❌ Error obteniendo ejecución:', selectError);
+              } else {
+                const imagenesExistentesJSON = ejecucionData?.imagenes_urls || [];
+                const todasLasImagenes = [...(Array.isArray(imagenesExistentesJSON) ? imagenesExistentesJSON : []), ...urlsNuevas];
+                // Eliminar duplicados del array
+                const imagenesUnicas = Array.from(new Set(todasLasImagenes));
+
+                const { error: updateError } = await supabase
+                  .from('ejecuciones_servicio')
+                  .update({ imagenes_urls: imagenesUnicas })
+                  .eq('id_ejecucion', idEjecucion);
+
+                if (updateError) {
+                  console.error('❌ Error guardando en imagenes_urls:', updateError);
+                } else {
+                  console.log('✅ URLs de imágenes guardadas en ejecuciones_servicio.imagenes_urls');
+                }
+              }
+            } else {
+              console.log(`✅ ${urlsNuevas.length} URL(s) de imagen(es) nueva(s) guardada(s) en la tabla imagenes_servicio`);
+              if (urls.length > urlsNuevas.length) {
+                console.log(`ℹ️ ${urls.length - urlsNuevas.length} imagen(es) ya existían y se omitieron para evitar duplicados`);
+              }
+            }
+          } else {
+            console.log('ℹ️ Todas las imágenes ya existen en la base de datos, no se insertaron duplicados');
+          }
+        } catch (err) {
+          console.warn('⚠️ Error guardando URLs en base de datos:', err);
+        }
       }
       
       if (erroresSubida > 0 && urls.length === 0) {
@@ -740,7 +954,7 @@ export default function GestionarEjecucion() {
     setGuardandoDocumentacion(prev => ({ ...prev, [orden.id_orden]: true }));
     try {
       const trabajo = trabajoRealizado[orden.id_orden] || '';
-      const repuestos = repuestosUtilizados[orden.id_orden] || '';
+      const equipos = equiposUtilizados[orden.id_orden] || '';
       const recom = recomendaciones[orden.id_orden] || '';
       
       if (!trabajo.trim()) {
@@ -751,8 +965,8 @@ export default function GestionarEjecucion() {
       // Combinar toda la documentación
       let documentacionCompleta = trabajo.trim();
       
-      if (repuestos.trim()) {
-        documentacionCompleta += `\n\nRepuestos Utilizados:\n${repuestos.trim()}`;
+      if (equipos.trim()) {
+        documentacionCompleta += `\n\nEquipos Utilizados:\n${equipos.trim()}`;
       }
       
       if (recom.trim()) {
@@ -795,6 +1009,8 @@ export default function GestionarEjecucion() {
       }
 
       success('Documentación guardada', 'La documentación del trabajo ha sido guardada exitosamente');
+      // Volver a modo solo lectura después de guardar
+      setModoEdicionDocumentacion(prev => ({ ...prev, [orden.id_orden]: false }));
       await cargarOrdenes();
     } catch (err: any) {
       console.error('Error guardando documentación:', err);
@@ -1263,62 +1479,127 @@ export default function GestionarEjecucion() {
                         </Alert>
                       ) : (
                         <div className="space-y-4">
+                          {!modoEdicionDocumentacion[orden.id_orden] && orden.ejecucion?.trabajo_realizado && orden.estado !== 'Completada' && !orden.ejecucion?.fecha_fin && (
+                            <div className="flex justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setModoEdicionDocumentacion(prev => ({ ...prev, [orden.id_orden]: true }))}
+                              >
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Editar Documentación
+                              </Button>
+                            </div>
+                          )}
+                          {(orden.estado === 'Completada' || orden.ejecucion?.fecha_fin) && (
+                            <Alert className="bg-gray-50 border-gray-200">
+                              <AlertCircle className="h-4 w-4 text-gray-600" />
+                              <AlertDescription className="text-gray-800">
+                                {orden.estado === 'Completada' 
+                                  ? 'Esta orden está completada. La documentación no se puede editar.'
+                                  : 'Este trabajo ha sido finalizado. La documentación no se puede editar.'
+                                }
+                              </AlertDescription>
+                            </Alert>
+                          )}
+                          
                           <div className="space-y-2">
                             <Label>Resumen del Trabajo *</Label>
-                            <Textarea
-                              placeholder="Describe brevemente el trabajo realizado, acciones tomadas, materiales usados, etc."
-                              value={trabajoRealizado[orden.id_orden] || ''}
-                              onChange={(e) => setTrabajoRealizado(prev => ({ ...prev, [orden.id_orden]: e.target.value }))}
-                              rows={4}
-                            />
+                            {modoEdicionDocumentacion[orden.id_orden] ? (
+                              <Textarea
+                                placeholder="Describe brevemente el trabajo realizado, acciones tomadas, materiales usados, etc."
+                                value={trabajoRealizado[orden.id_orden] || ''}
+                                onChange={(e) => setTrabajoRealizado(prev => ({ ...prev, [orden.id_orden]: e.target.value }))}
+                                rows={4}
+                              />
+                            ) : (
+                              <div className="bg-gray-50 p-3 rounded border min-h-[100px]">
+                                <p className="text-sm whitespace-pre-wrap">{trabajoRealizado[orden.id_orden] || 'No especificado'}</p>
+                              </div>
+                            )}
                           </div>
 
                           <div className="space-y-2">
-                            <Label>Repuestos Utilizados</Label>
-                            <Textarea
-                              placeholder="Lista de repuestos y materiales usados..."
-                              value={repuestosUtilizados[orden.id_orden] || ''}
-                              onChange={(e) => setRepuestosUtilizados(prev => ({ ...prev, [orden.id_orden]: e.target.value }))}
-                              rows={3}
-                            />
+                            <Label>Equipos Utilizados</Label>
+                            {modoEdicionDocumentacion[orden.id_orden] ? (
+                              <Textarea
+                                placeholder="Lista de equipos y herramientas usadas..."
+                                value={equiposUtilizados[orden.id_orden] || ''}
+                                onChange={(e) => setEquiposUtilizados(prev => ({ ...prev, [orden.id_orden]: e.target.value }))}
+                                rows={3}
+                              />
+                            ) : (
+                              <div className="bg-gray-50 p-3 rounded border min-h-[75px]">
+                                <p className="text-sm whitespace-pre-wrap">{equiposUtilizados[orden.id_orden] || 'No especificado'}</p>
+                              </div>
+                            )}
                           </div>
 
                           <div className="space-y-2">
                             <Label>Recomendaciones</Label>
-                            <Textarea
-                              placeholder="Sugerencias para el cliente..."
-                              value={recomendaciones[orden.id_orden] || ''}
-                              onChange={(e) => setRecomendaciones(prev => ({ ...prev, [orden.id_orden]: e.target.value }))}
-                              rows={3}
-                            />
+                            {modoEdicionDocumentacion[orden.id_orden] ? (
+                              <Textarea
+                                placeholder="Sugerencias para el cliente..."
+                                value={recomendaciones[orden.id_orden] || ''}
+                                onChange={(e) => setRecomendaciones(prev => ({ ...prev, [orden.id_orden]: e.target.value }))}
+                                rows={3}
+                              />
+                            ) : (
+                              <div className="bg-gray-50 p-3 rounded border min-h-[75px]">
+                                <p className="text-sm whitespace-pre-wrap">{recomendaciones[orden.id_orden] || 'No especificado'}</p>
+                              </div>
+                            )}
                           </div>
 
-                          {/* Subida de imágenes */}
-                          <div className="space-y-2">
-                            <Label>Fotografías del Trabajo</Label>
-                            <div className="border-2 border-dashed rounded-lg p-6">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                onChange={(e) => handleImagenesChange(orden.id_orden, e.target.files)}
-                                className="hidden"
-                                id={`imagenes-${orden.id_orden}`}
-                                disabled={subiendoImagenes[orden.id_orden]}
-                              />
-                              <label
-                                htmlFor={`imagenes-${orden.id_orden}`}
-                                className="cursor-pointer flex flex-col items-center justify-center space-y-2"
-                              >
-                                <Upload className="h-8 w-8 text-muted-foreground" />
-                                <p className="text-sm text-muted-foreground text-center">
-                                  Haz clic para subir imágenes (máximo 10)
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  PNG, JPG hasta 10MB cada una
-                                </p>
-                              </label>
+                          {/* Mostrar imágenes existentes en modo solo lectura */}
+                          {!modoEdicionDocumentacion[orden.id_orden] && orden.imagenes && orden.imagenes.length > 0 && (
+                            <div className="space-y-2">
+                              <Label>Fotografías del Trabajo</Label>
+                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {orden.imagenes.map((imagen) => (
+                                  <div key={imagen.id_imagen} className="relative group">
+                                    <img
+                                      src={imagen.url_imagen}
+                                      alt={imagen.descripcion || `Imagen ${imagen.id_imagen}`}
+                                      className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
+                                      onClick={() => window.open(imagen.url_imagen, '_blank')}
+                                    />
+                                    {imagen.descripcion && (
+                                      <p className="text-xs text-muted-foreground mt-1 truncate">{imagen.descripcion}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
+                          )}
+
+                          {/* Subida de imágenes */}
+                          {modoEdicionDocumentacion[orden.id_orden] && (
+                            <div className="space-y-2">
+                              <Label>Fotografías del Trabajo</Label>
+                              <div className="border-2 border-dashed rounded-lg p-6">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  multiple
+                                  onChange={(e) => handleImagenesChange(orden.id_orden, e.target.files)}
+                                  className="hidden"
+                                  id={`imagenes-${orden.id_orden}`}
+                                  disabled={subiendoImagenes[orden.id_orden]}
+                                />
+                                <label
+                                  htmlFor={`imagenes-${orden.id_orden}`}
+                                  className="cursor-pointer flex flex-col items-center justify-center space-y-2"
+                                >
+                                  <Upload className="h-8 w-8 text-muted-foreground" />
+                                  <p className="text-sm text-muted-foreground text-center">
+                                    Haz clic para subir imágenes (máximo 10)
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    PNG, JPG hasta 10MB cada una
+                                  </p>
+                                </label>
+                              </div>
 
                             {/* Previews de imágenes */}
                             {imagenesPreview[orden.id_orden] && imagenesPreview[orden.id_orden].length > 0 && (
@@ -1342,30 +1623,33 @@ export default function GestionarEjecucion() {
                               </div>
                             )}
 
-                            {imagenes[orden.id_orden] && imagenes[orden.id_orden].length > 0 && (
-                              <p className="text-xs text-muted-foreground">
-                                {imagenes[orden.id_orden].length} imagen(es) seleccionada(s)
-                              </p>
-                            )}
-                          </div>
+                              {imagenes[orden.id_orden] && imagenes[orden.id_orden].length > 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                  {imagenes[orden.id_orden].length} imagen(es) seleccionada(s)
+                                </p>
+                              )}
+                            </div>
+                          )}
 
-                          <Button 
-                            className="w-full" 
-                            onClick={() => guardarDocumentacion(orden)}
-                            disabled={guardandoDocumentacion[orden.id_orden] || subiendoImagenes[orden.id_orden] || !trabajoRealizado[orden.id_orden]?.trim()}
-                          >
-                            {guardandoDocumentacion[orden.id_orden] || subiendoImagenes[orden.id_orden] ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Guardando...
-                              </>
-                            ) : (
-                              <>
-                  <FileText className="mr-2 h-4 w-4" />
-                                Guardar Documentación
-                              </>
-                            )}
-              </Button>
+                          {modoEdicionDocumentacion[orden.id_orden] && (
+                            <Button 
+                              className="w-full" 
+                              onClick={() => guardarDocumentacion(orden)}
+                              disabled={guardandoDocumentacion[orden.id_orden] || subiendoImagenes[orden.id_orden] || !trabajoRealizado[orden.id_orden]?.trim()}
+                            >
+                              {guardandoDocumentacion[orden.id_orden] || subiendoImagenes[orden.id_orden] ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Guardando...
+                                </>
+                              ) : (
+                                <>
+                                  <FileText className="mr-2 h-4 w-4" />
+                                  Guardar Documentación
+                                </>
+                              )}
+                            </Button>
+                          )}
                         </div>
                       )}
                     </TabsContent>
@@ -1408,7 +1692,7 @@ export default function GestionarEjecucion() {
                               <SelectValue placeholder="Selecciona el tipo" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Falta de repuestos">Falta de repuestos</SelectItem>
+                              <SelectItem value="Falta de equipos">Falta de equipos</SelectItem>
                               <SelectItem value="Cliente no disponible">Cliente no disponible</SelectItem>
                               <SelectItem value="Problemas de acceso">Problemas de acceso</SelectItem>
                               <SelectItem value="Falta de herramientas">Falta de herramientas</SelectItem>

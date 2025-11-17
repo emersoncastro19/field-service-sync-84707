@@ -48,3 +48,12 @@ WHERE conrelid = 'notificaciones'::regclass
   AND contype = 'c'
 ORDER BY conname;
 
+
+
+
+
+
+
+
+
+

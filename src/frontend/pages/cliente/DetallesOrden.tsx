@@ -52,6 +52,11 @@ interface OrdenDetalle {
     trabajo_realizado: string | null;
     estado_resultado: string;
     confirmacion_cliente: string;
+    imagenes?: Array<{
+      id_imagen: number;
+      url_imagen: string;
+      descripcion: string | null;
+    }>;
   }>;
   impedimentos?: Array<{
     id_impedimento: number;
@@ -124,6 +129,53 @@ export default function ClienteDetallesOrden() {
         .eq('id_orden', idOrden)
         .order('fecha_inicio', { ascending: false });
 
+      // Obtener imágenes de las ejecuciones
+      let imagenesData: any[] = [];
+      if (ejecucionesData && ejecucionesData.length > 0) {
+        const ejecucionIds = ejecucionesData.map((e: any) => e.id_ejecucion);
+        
+        // Intentar cargar desde tabla imagenes_servicio
+        const { data: imagenes } = await supabase
+          .from('imagenes_servicio')
+          .select('*')
+          .in('id_ejecucion', ejecucionIds);
+        
+        if (imagenes && imagenes.length > 0) {
+          // Eliminar duplicados por URL
+          const urlsUnicas = new Set<string>();
+          imagenesData = imagenes.filter((img: any) => {
+            if (urlsUnicas.has(img.url_imagen)) {
+              return false; // Duplicado, omitir
+            }
+            urlsUnicas.add(img.url_imagen);
+            return true;
+          });
+        }
+        
+        // Si no hay suficientes imágenes en imagenes_servicio, complementar con imagenes_urls (solo si no hay en tabla)
+        if (imagenesData.length === 0) {
+          ejecucionesData.forEach((ejecucion: any) => {
+            if (ejecucion.imagenes_urls && Array.isArray(ejecucion.imagenes_urls)) {
+              // Eliminar duplicados del array JSON
+              const urlsUnicas = Array.from(new Set(ejecucion.imagenes_urls));
+              // Verificar que no estén ya en imagenesData
+              const urlsExistentes = new Set(imagenesData.map((img: any) => img.url_imagen));
+              urlsUnicas.forEach((url: string, index: number) => {
+                if (!urlsExistentes.has(url)) {
+                  imagenesData.push({
+                    id_imagen: index + 1,
+                    id_ejecucion: ejecucion.id_ejecucion,
+                    id_orden: ejecucion.id_orden,
+                    url_imagen: url,
+                    descripcion: null
+                  });
+                }
+              });
+            }
+          });
+        }
+      }
+
       // Obtener impedimentos
       const { data: impedimentosData } = await supabase
         .from('impedimentos')
@@ -169,7 +221,14 @@ export default function ClienteDetallesOrden() {
           nombre_completo: ordenData.agente.usuario.nombre_completo
         } : undefined,
         citas: citasData || [],
-        ejecuciones: ejecucionesData || [],
+        ejecuciones: (ejecucionesData || []).map((ejecucion: any) => ({
+          ...ejecucion,
+          imagenes: imagenesData.filter((img: any) => img.id_ejecucion === ejecucion.id_ejecucion).map((img: any) => ({
+            id_imagen: img.id_imagen,
+            url_imagen: img.url_imagen,
+            descripcion: img.descripcion
+          }))
+        })),
         impedimentos: impedimentosData || []
       };
 
@@ -255,7 +314,15 @@ export default function ClienteDetallesOrden() {
         .eq('id_orden', orden.id_orden)
         .single();
 
-      const idUsuarioTecnico = ordenData?.tecnicos?.usuarios?.id_usuario;
+      // Manejar si tecnicos es array o objeto único, y si usuarios es array o objeto único
+      let idUsuarioTecnico: any = null;
+      if (ordenData?.tecnicos) {
+        const tecnico = Array.isArray(ordenData.tecnicos) ? ordenData.tecnicos[0] : (ordenData.tecnicos as any);
+        if (tecnico?.usuarios) {
+          const usuarios = tecnico.usuarios;
+          idUsuarioTecnico = Array.isArray(usuarios) ? (usuarios[0] as any)?.id_usuario : (usuarios as any)?.id_usuario;
+        }
+      }
 
       // 4. Crear notificaciones
       if (idUsuarioTecnico) {
@@ -267,14 +334,48 @@ export default function ClienteDetallesOrden() {
               id_destinatario: idUsuarioTecnico,
               tipo_notificacion: 'Confirmación de Servicio',
               canal: 'Sistema_Interno',
-              mensaje: `El cliente ha confirmado el servicio de la orden ${orden.numero_orden}`,
-              fecha_enviada: new Date().toISOString(),
+              mensaje: `El cliente ha confirmado el servicio`,
+              fecha_enviada: fechaActual,
               leida: false
             }
           ]);
       }
 
-      // 5. Log de auditoría
+      // 5. Notificar a todos los coordinadores activos
+      const { data: coordinadoresData, error: coordinadoresError } = await supabase
+        .from('usuarios')
+        .select('id_usuario')
+        .eq('tipo_usuario', 'Coordinador')
+        .eq('estado', 'Activo');
+
+      // Crear notificaciones para todos los coordinadores activos
+      if (coordinadoresData && coordinadoresData.length > 0) {
+        const notificacionesCoordinadores = coordinadoresData
+          .filter(coord => coord.id_usuario != null)
+          .map(coord => {
+            const idDestinatario = typeof coord.id_usuario === 'string' 
+              ? parseInt(coord.id_usuario, 10) 
+              : coord.id_usuario;
+            
+            return {
+              id_orden: orden.id_orden,
+              id_destinatario: Number(idDestinatario),
+              tipo_notificacion: 'Servicio Confirmado por Cliente',
+              canal: 'Sistema_Interno',
+              mensaje: `El cliente ha confirmado que el servicio fue realizado satisfactoriamente.`,
+              fecha_enviada: fechaActual,
+              leida: false
+            };
+          });
+
+        if (notificacionesCoordinadores.length > 0) {
+          await supabase
+            .from('notificaciones')
+            .insert(notificacionesCoordinadores);
+        }
+      }
+
+      // 6. Log de auditoría
       await supabase
         .from('logs_auditoria')
         .insert([
@@ -332,7 +433,7 @@ export default function ClienteDetallesOrden() {
           id_destinatario: coordinadores.id_usuario,
           tipo_notificacion: 'Servicio Rechazado',
           canal: 'Sistema_Interno',
-          mensaje: `El cliente ha rechazado el servicio de la orden ${orden.numero_orden}. Se requiere revisión.`,
+          mensaje: `El cliente ha rechazado el servicio. Se requiere revisión.`,
           fecha_enviada: new Date().toISOString(),
           leida: false
         });
@@ -497,7 +598,7 @@ export default function ClienteDetallesOrden() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div>
+                <div>
                     <p className="text-sm text-muted-foreground">Tipo de Servicio</p>
                     <div className="flex items-center gap-2 mt-1">
                       <Package className="h-4 w-4 text-primary" />
@@ -508,7 +609,7 @@ export default function ClienteDetallesOrden() {
 
                 <Separator />
 
-                <div>
+                  <div>
                   <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                     <AlertCircle className="h-4 w-4" />
                     Descripción del Problema
@@ -649,10 +750,74 @@ export default function ClienteDetallesOrden() {
 
                       {ejecucion.trabajo_realizado && (
                         <div>
-                          <p className="text-sm font-semibold">Trabajo Realizado:</p>
-                          <p className="text-sm text-muted-foreground bg-gray-50 p-3 rounded mt-1">
-                            {ejecucion.trabajo_realizado}
-                          </p>
+                          <p className="text-sm font-semibold mb-2">Documentación del Trabajo:</p>
+                          <div className="bg-gray-50 p-3 rounded space-y-3">
+                            {(() => {
+                              const trabajo = ejecucion.trabajo_realizado || '';
+                              if (!trabajo) {
+                                return <p className="text-muted-foreground italic">No especificado</p>;
+                              }
+                              
+                              // Parsear trabajo_realizado para separar trabajo, equipos y recomendaciones
+                              const partes = trabajo.split('\n\n');
+                              const trabajoRealizado = partes[0] || '';
+                              let equipos = '';
+                              let recomendaciones = '';
+                              
+                              partes.forEach((parte: string) => {
+                                if (parte.startsWith('Equipos Utilizados:')) {
+                                  equipos = parte.replace('Equipos Utilizados:', '').trim();
+                                } else if (parte.startsWith('Recomendaciones:')) {
+                                  recomendaciones = parte.replace('Recomendaciones:', '').trim();
+                                }
+                              });
+                              
+                              return (
+                                <div className="space-y-4">
+                                  {trabajoRealizado && (
+                                    <div>
+                                      <p className="font-semibold text-sm mb-1">Descripción del trabajo:</p>
+                                      <p className="text-sm whitespace-pre-wrap">{trabajoRealizado}</p>
+                                    </div>
+                                  )}
+                                  {equipos && (
+                                    <div className="pt-2 border-t">
+                                      <p className="font-semibold text-sm mb-1">Equipos utilizados:</p>
+                                      <p className="text-sm whitespace-pre-wrap">{equipos}</p>
+                                    </div>
+                                  )}
+                                  {recomendaciones && (
+                                    <div className="pt-2 border-t">
+                                      <p className="font-semibold text-sm mb-1">Recomendaciones:</p>
+                                      <p className="text-sm whitespace-pre-wrap">{recomendaciones}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Mostrar imágenes si existen */}
+                      {ejecucion.imagenes && ejecucion.imagenes.length > 0 && (
+                        <div>
+                          <p className="text-sm font-semibold mb-2">Fotografías del Trabajo:</p>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {ejecucion.imagenes.map((imagen) => (
+                              <div key={imagen.id_imagen} className="relative group">
+                                <img
+                                  src={imagen.url_imagen}
+                                  alt={imagen.descripcion || `Imagen ${imagen.id_imagen}`}
+                                  className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
+                                  onClick={() => window.open(imagen.url_imagen, '_blank')}
+                                />
+                                {imagen.descripcion && (
+                                  <p className="text-xs text-muted-foreground mt-1 truncate">{imagen.descripcion}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
 
@@ -661,7 +826,7 @@ export default function ClienteDetallesOrden() {
                         <Badge>{ejecucion.estado_resultado}</Badge>
                       </div>
 
-                      {ejecucion.confirmacion_cliente === 'Pendiente' && (
+                      {ejecucion.confirmacion_cliente === 'Pendiente' && ejecucion.fecha_inicio && ejecucion.fecha_fin && (
                         <div className="pt-3 border-t">
                           <p className="text-sm font-semibold mb-3">¿Confirmas que el servicio fue realizado?</p>
                           <div className="flex gap-2">

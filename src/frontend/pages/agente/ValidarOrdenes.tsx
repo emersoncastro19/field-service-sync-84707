@@ -37,7 +37,6 @@ interface Orden {
     telefono: string | null;
     tipo_cliente: string;
     estado_cuenta: string;
-    plan_actual: string | null;
   };
 }
 
@@ -77,7 +76,6 @@ export default function ValidarOrdenes() {
             id_cliente,
             tipo_cliente,
             estado_cuenta,
-            plan_actual,
             usuarios!inner (
               nombre_completo,
               email,
@@ -105,8 +103,7 @@ export default function ValidarOrdenes() {
           email: orden.clientes.usuarios.email,
           telefono: orden.clientes.usuarios.telefono,
           tipo_cliente: orden.clientes.tipo_cliente,
-          estado_cuenta: orden.clientes.estado_cuenta,
-          plan_actual: orden.clientes.plan_actual
+          estado_cuenta: orden.clientes.estado_cuenta
         }
       }));
 
@@ -139,19 +136,29 @@ export default function ValidarOrdenes() {
     // Verificaciones
     const validaciones = {
       clienteActivo: ordenSeleccionada.cliente.estado_cuenta === 'Activo',
-      sinDeudas: ordenSeleccionada.cliente.estado_cuenta === 'Activo',
       descripcionClara: ordenSeleccionada.descripcion_solicitud.trim().length >= 20,
-      servicioAplicable: true
+      direccionValida: ordenSeleccionada.direccion_servicio && ordenSeleccionada.direccion_servicio.trim().length > 0,
+      informacionCompleta: ordenSeleccionada.cliente.telefono && ordenSeleccionada.cliente.email
     };
 
     // Validar que todas las condiciones se cumplan
-    if (!validaciones.clienteActivo || !validaciones.sinDeudas) {
-      error('No se puede validar', 'El cliente no está activo o tiene deudas pendientes');
+    if (!validaciones.clienteActivo) {
+      error('No se puede validar', 'El cliente no está activo');
       return;
     }
 
     if (!validaciones.descripcionClara) {
-      error('No se puede validar', 'La descripción de la orden no es suficientemente clara (mínimo 20 caracteres)');
+      error('No se puede validar', 'La descripción de la orden no cumple con el mínimo de caracteres requeridos (20 caracteres)');
+      return;
+    }
+
+    if (!validaciones.direccionValida) {
+      error('No se puede validar', 'La dirección de servicio no es válida');
+      return;
+    }
+
+    if (!validaciones.informacionCompleta) {
+      error('No se puede validar', 'La información de contacto del cliente está incompleta');
       return;
     }
 
@@ -213,7 +220,7 @@ export default function ValidarOrdenes() {
           id_destinatario: idUsuarioCliente,
           tipo_notificacion: 'Orden Validada',
           canal: 'Sistema_Interno',
-          mensaje: `Tu orden ${ordenSeleccionada.numero_orden} ha sido validada y está en proceso de asignación.`,
+          mensaje: `Tu orden ha sido validada y está en proceso de asignación.`,
           fecha_enviada: fechaActual,
           leida: false
         });
@@ -232,7 +239,7 @@ export default function ValidarOrdenes() {
               id_destinatario: idUsuarioCoordinador,
               tipo_notificacion: 'Orden Validada',
               canal: 'Sistema_Interno',
-              mensaje: `Nueva orden ${ordenSeleccionada.numero_orden} validada y lista para asignación de técnico.`,
+              mensaje: `Nueva orden validada y lista para asignación de técnico.`,
               fecha_enviada: fechaActual,
               leida: false
             });
@@ -336,7 +343,7 @@ export default function ValidarOrdenes() {
               id_destinatario: idUsuarioCliente,
               tipo_notificacion: 'Orden Rechazada',
               canal: 'Sistema_Interno',
-              mensaje: `Tu orden ${ordenSeleccionada.numero_orden} ha sido rechazada. Motivo: ${motivoRechazo.trim()}`,
+              mensaje: `Tu orden ha sido rechazada. Motivo: ${motivoRechazo.trim()}`,
               fecha_enviada: fechaActual,
               leida: false
             }
@@ -423,7 +430,9 @@ export default function ValidarOrdenes() {
             {ordenes.map((orden) => {
               const clienteActivo = orden.cliente.estado_cuenta === 'Activo';
               const descripcionClara = orden.descripcion_solicitud.trim().length >= 20;
-              const puedeValidar = clienteActivo && descripcionClara;
+              const direccionValida = orden.direccion_servicio && orden.direccion_servicio.trim().length > 0;
+              const informacionCompleta = orden.cliente.telefono && orden.cliente.email;
+              const puedeValidar = clienteActivo && descripcionClara && direccionValida && informacionCompleta;
 
               return (
                 <Card key={orden.id_orden} className="hover:shadow-md transition-shadow">
@@ -464,10 +473,6 @@ export default function ValidarOrdenes() {
                         <div>
                           <p className="text-muted-foreground">Tipo de Cliente</p>
                           <p className="font-medium">{orden.cliente.tipo_cliente}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Plan Actual</p>
-                          <p className="font-medium">{orden.cliente.plan_actual || 'Sin plan asignado'}</p>
                         </div>
                         <div>
                           <p className="text-muted-foreground">Contacto</p>
@@ -534,7 +539,7 @@ export default function ValidarOrdenes() {
                           ) : (
                             <XCircle className="h-4 w-4 text-red-600" />
                           )}
-                          <span>Cliente activo y sin deudas</span>
+                          <span>Cliente activo</span>
                         </div>
                         <div className="flex items-center gap-2">
                           {descripcionClara ? (
@@ -542,11 +547,23 @@ export default function ValidarOrdenes() {
                           ) : (
                             <XCircle className="h-4 w-4 text-red-600" />
                           )}
-                          <span>Descripción clara (mínimo 20 caracteres)</span>
+                          <span>Mínimo de caracteres en descripción (20 caracteres)</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-600" />
-                          <span>Servicio aplicable según plan</span>
+                          {direccionValida ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-600" />
+                          )}
+                          <span>Dirección de servicio válida</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {informacionCompleta ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <XCircle className="h-4 w-4 text-red-600" />
+                          )}
+                          <span>Información de contacto completa</span>
                         </div>
                       </div>
                     </div>
@@ -573,7 +590,7 @@ export default function ValidarOrdenes() {
                       <Alert variant="destructive">
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>
-                          No se puede validar esta orden. Verifica que el cliente esté activo y la descripción sea clara.
+                          No se puede validar esta orden. Verifica que el cliente esté activo y la descripción tenga el mínimo de caracteres requeridos.
                         </AlertDescription>
                       </Alert>
                     )}

@@ -91,6 +91,13 @@ serve(async (req) => {
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
     
     if (resendApiKey) {
+      const resendFromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'Sistema de Gestión Técnica <onboarding@resend.dev>'
+      
+      console.log('📧 Usando Resend para enviar email')
+      console.log('📧 From:', resendFromEmail)
+      console.log('📧 To:', emailData.to)
+      console.log('📧 Subject:', emailData.subject)
+      
       const resendResponse = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -98,7 +105,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: Deno.env.get('RESEND_FROM_EMAIL') || 'Sistema de Gestión Técnica <noreply@resend.dev>',
+          from: resendFromEmail,
           to: [emailData.to],
           subject: emailData.subject,
           html: emailData.html,
@@ -106,17 +113,95 @@ serve(async (req) => {
         })
       })
 
+      const responseText = await resendResponse.text()
+      console.log('📥 Resend Response Status:', resendResponse.status)
+      console.log('📥 Resend Response:', responseText)
+
       if (!resendResponse.ok) {
-        const errorText = await resendResponse.text()
-        console.error('Error Resend:', errorText)
-        throw new Error(`Error enviando email con Resend: ${errorText}`)
+        console.error('❌ Error Resend:', responseText)
+        console.error('❌ Status Code:', resendResponse.status)
+        
+        // Manejar error específico de dominio no verificado
+        let resendError: any = {}
+        try {
+          resendError = JSON.parse(responseText)
+          console.error('❌ Resend Error Parsed:', resendError)
+        } catch (e) {
+          console.error('❌ Error parseando respuesta:', e)
+          resendError = { message: responseText }
+        }
+        
+        // Si es error 403 de validación (dominio no verificado)
+        const isDomainError = resendResponse.status === 403 && (
+          resendError.message?.includes('only send testing emails') ||
+          resendError.message?.includes('testing emails') ||
+          resendError.message?.includes('verify a domain') ||
+          responseText.includes('only send testing emails') ||
+          responseText.includes('verify a domain')
+        )
+        
+        if (isDomainError) {
+          console.error('❌ Error 403: Dominio no verificado')
+          const errorMessage = `Resend requiere verificar un dominio para enviar emails a otros destinatarios.
+
+SOLUCIÓN:
+1. Verifica un dominio en Resend:
+   - Ve a: https://resend.com/domains
+   - Agrega tu dominio (puedes obtener uno gratis en Freenom: https://freenom.com)
+   - Configura los registros DNS que Resend te indique
+   
+2. Actualiza RESEND_FROM_EMAIL en Supabase:
+   - Supabase Dashboard → Settings → Edge Functions → Secrets
+   - Cambia RESEND_FROM_EMAIL a: Sistema de Gestión Técnica <noreply@tudominio.com>
+   
+3. Alternativa temporal (SOLO PARA PRUEBAS):
+   - El email solo puede enviarse a: emersoncastro9.ec@gmail.com
+   - Usa ese email para probar la funcionalidad
+   
+Para más información, revisa: DOMINIOS_GRATIS_OPCIONES.md`
+          
+          // Retornar error directamente en lugar de lanzarlo
+          return new Response(
+            JSON.stringify({ 
+              error: errorMessage
+            }),
+            { 
+              status: 403,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          )
+        }
+        
+        // Otros errores de Resend
+        const errorMsg = resendError.message || responseText || 'Error desconocido de Resend'
+        return new Response(
+          JSON.stringify({ 
+            error: `Error enviando email con Resend: ${errorMsg}`,
+            details: resendError
+          }),
+          { 
+            status: resendResponse.status || 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        )
+      }
+
+      let resendData
+      try {
+        resendData = JSON.parse(responseText)
+        console.log('✅ Resend Data:', resendData)
+      } catch (e) {
+        console.warn('⚠️ No se pudo parsear respuesta de Resend:', e)
+        resendData = { id: 'unknown', raw: responseText }
       }
 
       return new Response(
         JSON.stringify({ 
           success: true, 
           message: 'Email enviado exitosamente',
-          provider: 'Resend'
+          provider: 'Resend',
+          resendId: resendData.id || resendData.message_id,
+          resendResponse: resendData
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -219,39 +304,67 @@ serve(async (req) => {
       console.log('Amazon SES detectado pero requiere implementación adicional de firma AWS')
     }
 
-    // OPCIÓN 6: Fallback - Log y retorno exitoso (para desarrollo)
-    // En producción, esto debería fallar si no hay servicio configurado
-    console.log('⚠️ No hay servicio de email configurado. Email que se hubiera enviado:')
+    // OPCIÓN 6: Fallback - No hay servicio configurado
+    console.log('⚠️ No hay servicio de email configurado')
+    console.log('📋 Servicios verificados:')
+    console.log('  - SENDGRID_API_KEY:', sendGridApiKey ? '✅ Configurado' : '❌ No configurado')
+    console.log('  - RESEND_API_KEY:', resendApiKey ? '✅ Configurado' : '❌ No configurado')
+    console.log('  - BREVO_API_KEY:', brevoApiKey ? '✅ Configurado' : '❌ No configurado')
+    console.log('  - MAILGUN_API_KEY:', mailgunApiKey ? '✅ Configurado' : '❌ No configurado')
+    console.log('  - MAILGUN_DOMAIN:', mailgunDomain ? '✅ Configurado' : '❌ No configurado')
+    console.log('  - ENVIRONMENT:', Deno.env.get('ENVIRONMENT') || 'No configurado')
+    console.log('📧 Email que se hubiera enviado:')
     console.log({
       to: emailData.to,
       subject: emailData.subject,
       // No loguear el contenido completo por seguridad
     })
 
-    // En desarrollo, retornamos éxito pero solo logueamos
-    // En producción, lanzar error si no hay servicio configurado
-    const isDevelopment = Deno.env.get('ENVIRONMENT') === 'development'
-    
-    if (isDevelopment) {
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'Email logueado (modo desarrollo - servicio de email no configurado)',
-          provider: 'none'
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
-    } else {
-      throw new Error('No hay servicio de email configurado')
-    }
+    // Mensaje de error más descriptivo
+    const errorMessage = `No hay servicio de email configurado. Por favor, configura al menos uno de estos servicios en Supabase Dashboard → Settings → Edge Functions → Secrets:
+
+1. RESEND_API_KEY (Recomendado - Gratis, 3,000 emails/mes)
+   - Obtén tu API key en: https://resend.com
+   - Agrega: RESEND_API_KEY = re_xxxxxxxxxxxxx
+   - Agrega: RESEND_FROM_EMAIL = Sistema de Gestión Técnica <onboarding@resend.dev>
+
+2. SENDGRID_API_KEY
+   - Obtén tu API key en: https://sendgrid.com
+   - Agrega: SENDGRID_API_KEY = SG.xxxxxxxxxxxxx
+   - Agrega: SENDGRID_FROM_EMAIL = noreply@tudominio.com
+
+3. BREVO_API_KEY
+   - Obtén tu API key en: https://brevo.com
+   - Agrega: BREVO_API_KEY = xxxxxxxxxxxxx
+   - Agrega: BREVO_FROM_EMAIL = noreply@tudominio.com
+
+4. MAILGUN_API_KEY + MAILGUN_DOMAIN
+   - Obtén tu API key en: https://mailgun.com
+   - Agrega: MAILGUN_API_KEY = xxxxxxxxxxxxx
+   - Agrega: MAILGUN_DOMAIN = mg.tudominio.com
+   - Agrega: MAILGUN_FROM_EMAIL = noreply@tudominio.com
+
+Para más información, revisa: DIAGNOSTICO_ERROR_500_EMAIL.md`
+
+    throw new Error(errorMessage)
 
   } catch (error: any) {
-    console.error('Error en send-email:', error)
+    console.error('❌ Error en send-email:', error)
+    console.error('❌ Stack trace:', error.stack)
+    console.error('❌ Error type:', error.constructor.name)
+    
+    // Proporcionar mensaje de error más descriptivo
+    let errorMessage = error.message || 'Error desconocido al enviar email'
+    
+    // Si es un error de parseo JSON, proporcionar ayuda
+    if (error instanceof SyntaxError || error.message?.includes('JSON')) {
+      errorMessage = 'Error al procesar los datos del email. Verifica que los datos estén en formato JSON válido.'
+    }
+    
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Error desconocido al enviar email' 
+        error: errorMessage,
+        details: Deno.env.get('ENVIRONMENT') === 'development' ? error.stack : undefined
       }),
       { 
         status: 500,

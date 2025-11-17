@@ -260,7 +260,7 @@ export default function Citas() {
               id_destinatario: idUsuarioCliente,
               tipo_notificacion: 'Cita Reprogramada',
               canal: 'Sistema_Interno',
-              mensaje: `Se ha aprobado tu solicitud de reprogramación para la orden ${cita.numero_orden}. Nueva fecha: ${formatearSoloFechaVenezuela(cita.fecha_programada)} a las ${formatearHoraVenezuela(cita.fecha_programada)}. Por favor, confirma esta nueva fecha.`,
+              mensaje: `Se ha aprobado tu solicitud de reprogramación. Nueva fecha: ${formatearSoloFechaVenezuela(cita.fecha_programada)} a las ${formatearHoraVenezuela(cita.fecha_programada)}. Por favor, confirma esta nueva cita.`,
               fecha_enviada: fechaActual,
               leida: false
             }

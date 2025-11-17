@@ -22,7 +22,6 @@ interface ClienteData {
   referencias_ubicacion: string | null;
   tipo_cliente: string;
   estado_cuenta: string;
-  plan_actual: string | null;
   usuario: {
     id_usuario: number;
     nombre_completo: string;
@@ -83,7 +82,6 @@ export default function NuevaOrden() {
           referencias_ubicacion,
           tipo_cliente,
           estado_cuenta,
-          plan_actual,
           usuarios!inner (
             id_usuario,
             nombre_completo,
@@ -141,8 +139,7 @@ export default function NuevaOrden() {
             direccion_servicio,
             referencias_ubicacion,
             tipo_cliente,
-            estado_cuenta,
-            plan_actual
+            estado_cuenta
           )
         `)
         .or(`nombre_completo.ilike.%${terminoBusqueda}%,email.ilike.%${terminoBusqueda}%,telefono.ilike.%${terminoBusqueda}%`)
@@ -162,7 +159,6 @@ export default function NuevaOrden() {
           referencias_ubicacion,
           tipo_cliente,
           estado_cuenta,
-          plan_actual,
           usuarios!inner (
             id_usuario,
             nombre_completo,
@@ -518,10 +514,6 @@ export default function NuevaOrden() {
                   <p className="text-sm text-muted-foreground">Tipo de Cliente</p>
                   <p className="font-medium">{clienteData.tipo_cliente}</p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Plan Actual</p>
-                  <p className="font-medium">{clienteData.plan_actual || 'Sin plan asignado'}</p>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -564,12 +556,6 @@ export default function NuevaOrden() {
                         <div className="flex items-center gap-2">
                           <AlertCircle className="h-4 w-4 text-orange-600" />
                           Reparación
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="Cambio_Plan">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-blue-600" />
-                          Cambio de Plan
                         </div>
                       </SelectItem>
                       <SelectItem value="Retiro">

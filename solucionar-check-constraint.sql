@@ -71,3 +71,12 @@ INSERT INTO notificaciones (
 -- NOTA: Después de ejecutar este script, reinicia tu aplicación
 -- y prueba asignar una orden nuevamente.
 
+
+
+
+
+
+
+
+
+

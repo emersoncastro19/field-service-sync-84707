@@ -168,8 +168,8 @@ export default function NuevaOrden() {
           .eq('id_cliente', clienteData.id_cliente);
       }
 
-      // Obtener nombre del cliente para la notificación
-      const nombreCliente = usuario?.nombre_completo || 'Cliente';
+      // Obtener username del cliente para la notificación
+      const usernameCliente = usuario?.username || 'Cliente';
 
       // Obtener todos los agentes activos para notificarles
       console.log('\n🔍 ========== BUSCANDO AGENTES ==========');
@@ -228,7 +228,7 @@ export default function NuevaOrden() {
             id_destinatario: Number(idDestinatario), // Asegurar que sea número
             tipo_notificacion: 'Nueva Orden Creada',
             canal: 'Sistema_Interno',
-            mensaje: `Se ha creado una nueva orden de servicio ${numeroOrden} por el cliente ${nombreCliente}. Tipo: ${formData.tipo_servicio}. Por favor, valida y procesa la orden.`,
+            mensaje: `Se ha creado una nueva orden de servicio por el cliente ${usernameCliente}. Por favor, valida y procesa la orden.`,
             fecha_enviada: fechaActual,
             leida: false
           };
@@ -437,12 +437,6 @@ export default function NuevaOrden() {
                       <div className="flex items-center gap-2">
                         <AlertCircle className="h-4 w-4 text-orange-600" />
                         Reparación
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="Cambio_Plan">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-blue-600" />
-                        Cambio de Plan
                       </div>
                     </SelectItem>
                     <SelectItem value="Retiro">

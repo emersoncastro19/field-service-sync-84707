@@ -64,3 +64,12 @@ Si después de 10-15 minutos sigues viendo el error:
 
 3. **Como última opción**, puedes intentar crear la columna nuevamente con un nombre temporal diferente para forzar la actualización.
 
+
+
+
+
+
+
+
+
+

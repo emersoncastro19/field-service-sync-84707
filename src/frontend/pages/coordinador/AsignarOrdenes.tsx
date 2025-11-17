@@ -374,7 +374,7 @@ export default function AsignarOrdenes() {
           id_destinatario: idUsuarioCliente,
           tipo_notificacion: 'Cita Programada',
           canal: 'Sistema_Interno',
-          mensaje: `Se ha programado una cita para tu orden ${ordenSeleccionada.numero_orden} el ${formatearSoloFechaVenezuela(fechaProgramada)} a las ${horaCita}. Por favor, confirma si esta fecha te parece bien o solicita una reprogramación.`,
+          mensaje: `Se ha programado una cita para el ${formatearSoloFechaVenezuela(fechaProgramada)} a las ${horaCita}. Por favor, confirma esta cita o solicita una reprogramación si es necesario.`,
           fecha_enviada: new Date().toISOString(),
           leida: false
         };
@@ -390,7 +390,7 @@ export default function AsignarOrdenes() {
           id_destinatario: idUsuarioTecnico,
           tipo_notificacion: 'Asignación de Orden',
           canal: 'Sistema_Interno',
-          mensaje: `Se te ha asignado la orden ${ordenSeleccionada.numero_orden}. Cita programada para el ${formatearSoloFechaVenezuela(fechaProgramada)} a las ${horaCita}`,
+          mensaje: `Se te ha asignado una orden. Cita programada para el ${formatearSoloFechaVenezuela(fechaProgramada)} a las ${horaCita}`,
           fecha_enviada: new Date().toISOString(),
           leida: false
         };

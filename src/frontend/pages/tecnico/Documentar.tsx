@@ -6,7 +6,7 @@ import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
 import { Textarea } from "@/frontend/components/ui/textarea";
 import { Label } from "@/frontend/components/ui/label";
-import { Camera, FileText, Upload, Loader2, ArrowLeft, CheckCircle } from "lucide-react";
+import { Camera, FileText, Upload, Loader2, ArrowLeft, CheckCircle, Pencil, AlertCircle } from "lucide-react";
 import { supabase } from "@/backend/config/supabaseClient";
 import { useAuth } from "@/frontend/context/AuthContext";
 import { useToast } from "@/frontend/context/ToastContext";
@@ -38,11 +38,14 @@ export default function Documentar() {
   const [orden, setOrden] = useState<Orden | null>(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [modoEdicion, setModoEdicion] = useState(false);
   
   // Campos de documentación
   const [resumenTrabajo, setResumenTrabajo] = useState("");
-  const [repuestosUtilizados, setRepuestosUtilizados] = useState("");
+  const [equiposUtilizados, setEquiposUtilizados] = useState("");
   const [recomendaciones, setRecomendaciones] = useState("");
+  const [imagenesUrls, setImagenesUrls] = useState<string[]>([]);
+  const [trabajoFinalizado, setTrabajoFinalizado] = useState(false);
 
   useEffect(() => {
     if (!idOrden) {
@@ -94,10 +97,10 @@ export default function Documentar() {
 
       if (ordenError) throw ordenError;
 
-      // 3. Obtener ejecución de servicio
+      // 3. Obtener ejecución de servicio (incluir imagenes_urls en caso de que se use JSON)
       const { data: ejecucionData } = await supabase
         .from('ejecuciones_servicio')
-        .select('id_ejecucion, trabajo_realizado')
+        .select('id_ejecucion, trabajo_realizado, fecha_fin, imagenes_urls')
         .eq('id_orden', parseInt(idOrden, 10))
         .single();
 
@@ -109,7 +112,13 @@ export default function Documentar() {
         descripcion_solicitud: ordenData.descripcion_solicitud,
         direccion_servicio: ordenData.direccion_servicio,
         cliente: {
-          nombre_completo: ordenData.clientes?.usuarios?.nombre_completo || 'Cliente desconocido'
+          nombre_completo: (() => {
+            const clientes = ordenData.clientes as any;
+            if (Array.isArray(clientes?.usuarios)) {
+              return clientes?.usuarios[0]?.nombre_completo;
+            }
+            return clientes?.usuarios?.nombre_completo;
+          })() || 'Cliente desconocido'
         },
         ejecucion: ejecucionData ? {
           id_ejecucion: ejecucionData.id_ejecucion,
@@ -119,9 +128,56 @@ export default function Documentar() {
 
       setOrden(ordenFormateada);
 
-      // Si ya hay trabajo realizado, cargarlo en el campo de resumen
+      // Si ya hay trabajo realizado, cargarlo y parsearlo
       if (ejecucionData?.trabajo_realizado) {
-        setResumenTrabajo(ejecucionData.trabajo_realizado);
+        const trabajo = ejecucionData.trabajo_realizado;
+        const partes = trabajo.split('\n\n');
+        setResumenTrabajo(partes[0] || '');
+        
+        partes.forEach((parte: string) => {
+          if (parte.startsWith('Equipos Utilizados:')) {
+            setEquiposUtilizados(parte.replace('Equipos Utilizados:', '').trim());
+          } else if (parte.startsWith('Recomendaciones:')) {
+            setRecomendaciones(parte.replace('Recomendaciones:', '').trim());
+          }
+        });
+        
+        // Si ya hay documentación o el trabajo fue finalizado (fecha_fin no null), iniciar en modo solo lectura
+        const estaFinalizado = ejecucionData.fecha_fin !== null && ejecucionData.fecha_fin !== undefined;
+        setTrabajoFinalizado(estaFinalizado);
+        setModoEdicion(!estaFinalizado); // Si el trabajo está finalizado, no permitir edición
+      } else {
+        // Si no hay documentación, permitir edición
+        setModoEdicion(true);
+      }
+      
+      // Cargar imágenes de la ejecución si existe
+      if (ejecucionData?.id_ejecucion) {
+        console.log('🔍 Buscando imágenes para ejecución:', ejecucionData.id_ejecucion);
+        
+        // Intentar cargar desde tabla imagenes_servicio
+        const { data: imagenesData, error: imagenesError } = await supabase
+          .from('imagenes_servicio')
+          .select('*')
+          .eq('id_ejecucion', ejecucionData.id_ejecucion);
+        
+        if (imagenesError) {
+          console.warn('⚠️ Error cargando desde imagenes_servicio:', imagenesError);
+        }
+        
+        if (imagenesData && imagenesData.length > 0) {
+          // Guardar URLs de imágenes para mostrar
+          const urls = imagenesData.map((img: any) => img.url_imagen);
+          setImagenesUrls(urls);
+          console.log('✅ Imágenes cargadas desde imagenes_servicio:', urls.length, urls);
+        } else if (ejecucionData.imagenes_urls && Array.isArray(ejecucionData.imagenes_urls) && ejecucionData.imagenes_urls.length > 0) {
+          // Si no hay tabla imagenes_servicio, intentar desde ejecuciones_servicio (campo JSON)
+          setImagenesUrls(ejecucionData.imagenes_urls);
+          console.log('✅ Imágenes cargadas desde imagenes_urls (JSON):', ejecucionData.imagenes_urls.length, ejecucionData.imagenes_urls);
+        } else {
+          console.log('ℹ️ No se encontraron imágenes para esta ejecución');
+          setImagenesUrls([]);
+        }
       }
     } catch (err: any) {
       console.error('Error cargando orden:', err);
@@ -149,8 +205,8 @@ export default function Documentar() {
       // Si hay repuestos y recomendaciones, los incluimos en el resumen
       let documentacionCompleta = resumenTrabajo.trim();
       
-      if (repuestosUtilizados.trim()) {
-        documentacionCompleta += `\n\nRepuestos Utilizados:\n${repuestosUtilizados.trim()}`;
+      if (equiposUtilizados.trim()) {
+        documentacionCompleta += `\n\nEquipos Utilizados:\n${equiposUtilizados.trim()}`;
       }
       
       if (recomendaciones.trim()) {
@@ -187,7 +243,9 @@ export default function Documentar() {
       }
 
       success('Documentación guardada', 'La documentación del trabajo ha sido guardada exitosamente');
-      navigate('/tecnico/gestionar-ejecucion');
+      // Volver a modo solo lectura después de guardar
+      setModoEdicion(false);
+      // No navegar, permitir que el usuario vea la documentación guardada
     } catch (err: any) {
       console.error('Error guardando documentación:', err);
       error('Error', 'No se pudo guardar la documentación');
@@ -300,77 +358,139 @@ export default function Documentar() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+              {!modoEdicion && orden.ejecucion?.trabajo_realizado && !trabajoFinalizado && (
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setModoEdicion(true)}
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Editar Documentación
+                  </Button>
+                </div>
+              )}
+              {trabajoFinalizado && (
+                <Alert className="bg-gray-50 border-gray-200">
+                  <AlertCircle className="h-4 w-4 text-gray-600" />
+                  <AlertDescription className="text-gray-800">
+                    Este trabajo ha sido finalizado. La documentación no se puede editar.
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <div className="space-y-2">
                 <Label htmlFor="work-summary">Resumen del Trabajo *</Label>
-                <Textarea
-                  id="work-summary"
-                  placeholder="Describe brevemente el trabajo realizado, acciones tomadas, materiales usados, etc."
-                  rows={5}
-                  value={resumenTrabajo}
-                  onChange={(e) => setResumenTrabajo(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Este campo es requerido. Es el mismo que se usa en "Finalizar Trabajo".
-                </p>
+                {modoEdicion ? (
+                  <>
+                    <Textarea
+                      id="work-summary"
+                      placeholder="Describe brevemente el trabajo realizado, acciones tomadas, materiales usados, etc."
+                      rows={5}
+                      value={resumenTrabajo}
+                      onChange={(e) => setResumenTrabajo(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Este campo es requerido. Es el mismo que se usa en "Finalizar Trabajo".
+                    </p>
+                  </>
+                ) : (
+                  <div className="bg-gray-50 p-3 rounded border min-h-[125px]">
+                    <p className="text-sm whitespace-pre-wrap">{resumenTrabajo || 'No especificado'}</p>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="parts-used">Repuestos Utilizados</Label>
-                <Textarea
-                  id="parts-used"
-                  placeholder="Lista de repuestos y materiales usados..."
-                  rows={3}
-                  value={repuestosUtilizados}
-                  onChange={(e) => setRepuestosUtilizados(e.target.value)}
-                />
+                <Label htmlFor="parts-used">Equipos Utilizados</Label>
+                {modoEdicion ? (
+                  <Textarea
+                    id="parts-used"
+                    placeholder="Lista de equipos y herramientas usadas..."
+                    rows={3}
+                    value={equiposUtilizados}
+                    onChange={(e) => setEquiposUtilizados(e.target.value)}
+                  />
+                ) : (
+                  <div className="bg-gray-50 p-3 rounded border min-h-[75px]">
+                    <p className="text-sm whitespace-pre-wrap">{equiposUtilizados || 'No especificado'}</p>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="recommendations">Recomendaciones</Label>
-                <Textarea
-                  id="recommendations"
-                  placeholder="Sugerencias para el cliente..."
-                  rows={3}
-                  value={recomendaciones}
-                  onChange={(e) => setRecomendaciones(e.target.value)}
-                />
+                {modoEdicion ? (
+                  <Textarea
+                    id="recommendations"
+                    placeholder="Sugerencias para el cliente..."
+                    rows={3}
+                    value={recomendaciones}
+                    onChange={(e) => setRecomendaciones(e.target.value)}
+                  />
+                ) : (
+                  <div className="bg-gray-50 p-3 rounded border min-h-[75px]">
+                    <p className="text-sm whitespace-pre-wrap">{recomendaciones || 'No especificado'}</p>
+                  </div>
+                )}
               </div>
+
+              {/* Mostrar imágenes si existen */}
+              {imagenesUrls.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Fotografías del Trabajo</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {imagenesUrls.map((url, index) => (
+                      <div key={index} className="relative group">
+                        <img
+                          src={url}
+                          alt={`Imagen ${index + 1}`}
+                          className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => window.open(url, '_blank')}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <Alert>
                 <CheckCircle className="h-4 w-4" />
                 <AlertDescription>
                   <strong>Nota:</strong> El campo "Resumen del Trabajo" es el mismo que aparece en "Gestionar Ejecución" 
-                  cuando finalizas un trabajo. Los campos adicionales (Repuestos y Recomendaciones) se guardarán 
+                  cuando finalizas un trabajo. Los campos adicionales (Equipos y Recomendaciones) se guardarán 
                   junto con el resumen en la documentación completa.
                 </AlertDescription>
               </Alert>
 
-              <div className="flex gap-3">
-                <Button 
-                  className="flex-1" 
-                  onClick={guardarDocumentacion}
-                  disabled={guardando || !resumenTrabajo.trim()}
-                >
-                  {guardando ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="mr-2 h-4 w-4" />
-                      Guardar Documentación
-                    </>
-                  )}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => navigate('/tecnico/gestionar-ejecucion')}
-                  disabled={guardando}
-                >
-                  Cancelar
-                </Button>
-              </div>
+              {modoEdicion && (
+                <div className="flex gap-3">
+                  <Button 
+                    className="flex-1" 
+                    onClick={guardarDocumentacion}
+                    disabled={guardando || !resumenTrabajo.trim()}
+                  >
+                    {guardando ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Guardando...
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="mr-2 h-4 w-4" />
+                        Guardar Documentación
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => navigate('/tecnico/gestionar-ejecucion')}
+                    disabled={guardando}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

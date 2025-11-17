@@ -389,7 +389,7 @@ export default function OrdenesCompletadas() {
                   {/* Botón Ver Detalles */}
                   <div className="flex gap-2 pt-2">
                     <Button variant="outline" className="flex-1" asChild>
-                      <Link to={`/tecnico/gestionar-ejecucion?orden=${orden.id_orden}`}>
+                      <Link to={`/tecnico/detalles-orden?id=${orden.id_orden}`}>
                         <Eye className="h-4 w-4 mr-2" />
                         Ver Detalles
                       </Link>

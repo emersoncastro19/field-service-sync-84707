@@ -20,6 +20,7 @@ const menuItems = {
     { icon: Home, label: "Panel de Control", path: "/cliente" },
     { icon: FileText, label: "Órdenes de Servicio", path: "/cliente/ordenes" },
     { icon: Calendar, label: "Citas", path: "/cliente/citas" },
+    { icon: Bell, label: "Notificaciones", path: "/cliente/notificaciones" },
     { icon: Users, label: "Perfil", path: "/cliente/perfil" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
@@ -29,6 +30,7 @@ const menuItems = {
     { icon: Plus, label: "Crear Nueva Orden", path: "/agente/nueva-orden" },
     { icon: ShieldCheck, label: "Validar Órdenes", path: "/agente/validar-ordenes" },
     { icon: History, label: "Consultar Historial", path: "/agente/historial" },
+    { icon: Bell, label: "Notificaciones", path: "/agente/notificaciones" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   coordinator: [
@@ -36,6 +38,7 @@ const menuItems = {
     { icon: Calendar, label: "Gestionar Citas de Servicio", path: "/coordinador/citas" },
     { icon: MapPin, label: "Asignar Órdenes", path: "/coordinador/asignar" },
     { icon: History, label: "Historial de Asignaciones", path: "/coordinador/historial" },
+    { icon: Bell, label: "Notificaciones", path: "/coordinador/notificaciones" },
     { icon: BarChart3, label: "Reportes", path: "/reportes" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
@@ -44,6 +47,7 @@ const menuItems = {
     { icon: Calendar, label: "Mis Citas", path: "/tecnico/citas" },
     { icon: Wrench, label: "Gestionar Ejecución de Servicio", path: "/tecnico/gestionar-ejecucion" },
     { icon: History, label: "Órdenes Completadas", path: "/tecnico/ordenes-completadas" },
+    { icon: Bell, label: "Notificaciones", path: "/tecnico/notificaciones" },
     { icon: HelpCircle, label: "Ayuda", path: "/ayuda" },
   ],
   admin: [

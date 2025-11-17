@@ -321,11 +321,18 @@ export default function HistorialAsignaciones() {
                           </div>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to={`/coordinador/asignar`}>
-                          Ver/Reasignar
-                        </Link>
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/coordinador/detalles-orden?id=${orden.id_orden}`}>
+                            Ver Detalles
+                          </Link>
+                        </Button>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link to={`/coordinador/asignar`}>
+                            Ver/Reasignar
+                          </Link>
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}

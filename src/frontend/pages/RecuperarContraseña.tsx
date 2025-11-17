@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
 import { Label } from "@/frontend/components/ui/label";
@@ -10,6 +10,7 @@ import { useToast } from "@/frontend/context/ToastContext";
 
 export default function RecuperarContraseña() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { success, error } = useToast();
   const [step, setStep] = useState<'email' | 'token' | 'password'>('email');
   const [email, setEmail] = useState('');
@@ -17,6 +18,18 @@ export default function RecuperarContraseña() {
   const [nuevaContraseña, setNuevaContraseña] = useState('');
   const [confirmarContraseña, setConfirmarContraseña] = useState('');
   const [cargando, setCargando] = useState(false);
+
+  // Leer token y email desde la URL si vienen del enlace del email
+  useEffect(() => {
+    const tokenFromUrl = searchParams.get('token');
+    const emailFromUrl = searchParams.get('email');
+    
+    if (tokenFromUrl && emailFromUrl) {
+      setEmail(emailFromUrl);
+      setToken(tokenFromUrl);
+      setStep('password'); // Saltar directamente a cambiar contraseña
+    }
+  }, [searchParams]);
 
   const handleSolicitarRecuperacion = async (e: React.FormEvent) => {
     e.preventDefault();

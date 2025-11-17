@@ -80,36 +80,33 @@ export default function ConfirmacionServicio() {
           )
         `)
         .eq('id_cliente', clienteData.id_cliente)
-        .in('estado', ['Completada', 'En Proceso'])
+        .eq('estado', 'Completada')
         .order('fecha_completada', { ascending: false });
 
       if (ordenesError) throw ordenesError;
 
       // 3. Obtener ejecuciones pendientes de confirmación
-      // Filtrar solo las órdenes que tienen ejecuciones con confirmacion_cliente = 'Pendiente'
-      const { data: ejecucionesData, error: ejecucionesError } = await supabase
-        .from('ejecuciones_servicio')
-        .select('*')
-        .eq('confirmacion_cliente', 'Pendiente')
-        .order('fecha_fin', { ascending: false });
-
-      if (ejecucionesError) throw ejecucionesError;
-
-      // Obtener IDs de órdenes de las ejecuciones pendientes
-      const ordenIdsPendientes = ejecucionesData?.map((e: any) => e.id_orden) || [];
-      
-      if (ordenIdsPendientes.length === 0) {
+      const ordenIds = ordenesData.map((o: any) => o.id_orden);
+      if (ordenIds.length === 0) {
         setOrdenes([]);
         return;
       }
 
-      // Filtrar órdenes que están en "En Proceso" y tienen ejecuciones pendientes
-      const ordenesConEjecucionesPendientes = ordenesData.filter((orden: any) => 
-        ordenIdsPendientes.includes(orden.id_orden)
-      );
+      const { data: ejecucionesData, error: ejecucionesError } = await supabase
+        .from('ejecuciones_servicio')
+        .select('*')
+        .in('id_orden', ordenIds)
+        .eq('confirmacion_cliente', 'Pendiente')
+        .not('fecha_fin', 'is', null) // Solo mostrar órdenes donde el técnico haya finalizado
+        .order('fecha_fin', { ascending: false });
+
+      if (ejecucionesError) throw ejecucionesError;
 
       // 4. Combinar datos
-      const ordenesCompletadas: OrdenCompletada[] = ordenesConEjecucionesPendientes
+      const ordenesCompletadas: OrdenCompletada[] = ordenesData
+        .filter((orden: any) => {
+          return ejecucionesData?.some((e: any) => e.id_orden === orden.id_orden);
+        })
         .map((orden: any) => {
           const ejecucion = ejecucionesData?.find((e: any) => e.id_orden === orden.id_orden);
           return {
@@ -151,14 +148,9 @@ export default function ConfirmacionServicio() {
       if (updateError) throw updateError;
 
       // 2. Actualizar estado de la orden a "Completada" (definitivamente)
-      // Ahora también actualizamos fecha_completada cuando el cliente confirma
-      const fechaActual = new Date().toISOString();
       const { error: ordenError } = await supabase
         .from('ordenes_servicio')
-        .update({ 
-          estado: 'Completada',
-          fecha_completada: fechaActual
-        })
+        .update({ estado: 'Completada' })
         .eq('id_orden', orden.id_orden);
 
       if (ordenError) throw ordenError;
@@ -214,77 +206,68 @@ export default function ConfirmacionServicio() {
         .eq('id_orden', orden.id_orden)
         .single();
 
-      const idUsuarioTecnico = ordenData?.tecnicos?.usuarios?.id_usuario;
-
-      // 5. Obtener coordinador para notificación
-      const { data: ordenDataCoordinador } = await supabase
-        .from('ordenes_servicio')
-        .select('id_coordinador_supervisor')
-        .eq('id_orden', orden.id_orden)
-        .single();
-
-      let idUsuarioCoordinador: number | null = null;
-
-      if (ordenDataCoordinador?.id_coordinador_supervisor) {
-        const { data: coordinadorData } = await supabase
-          .from('coordinadores_campo')
-          .select('id_usuario')
-          .eq('id_coordinador', ordenDataCoordinador.id_coordinador_supervisor)
-          .single();
-
-        if (coordinadorData?.id_usuario) {
-          idUsuarioCoordinador = typeof coordinadorData.id_usuario === 'string' 
-            ? parseInt(coordinadorData.id_usuario, 10) 
-            : coordinadorData.id_usuario;
+      // Manejar si tecnicos es array o objeto único, y si usuarios es array o objeto único
+      let idUsuarioTecnico: any = null;
+      if (ordenData?.tecnicos) {
+        const tecnico = Array.isArray(ordenData.tecnicos) ? ordenData.tecnicos[0] : (ordenData.tecnicos as any);
+        if (tecnico?.usuarios) {
+          const usuarios = tecnico.usuarios;
+          idUsuarioTecnico = Array.isArray(usuarios) ? (usuarios[0] as any)?.id_usuario : (usuarios as any)?.id_usuario;
         }
       }
 
-      // 6. Crear notificaciones (usar la fechaActual ya declarada anteriormente)
-      const notificaciones = [];
-
-      // Notificar al técnico
+      // 5. Crear notificaciones
       if (idUsuarioTecnico) {
-        const idTecnico = typeof idUsuarioTecnico === 'string' 
-          ? parseInt(idUsuarioTecnico, 10) 
-          : idUsuarioTecnico;
-
-        notificaciones.push({
-          id_orden: orden.id_orden,
-          id_destinatario: idTecnico,
-          tipo_notificacion: 'Servicio Confirmado por Cliente',
-          canal: 'Sistema_Interno',
-          mensaje: `El cliente ha confirmado que el servicio de la orden ${orden.numero_orden} fue realizado satisfactoriamente.`,
-          fecha_enviada: fechaActual,
-          leida: false
-        });
-      }
-
-      // Notificar al coordinador
-      if (idUsuarioCoordinador) {
-        notificaciones.push({
-          id_orden: orden.id_orden,
-          id_destinatario: idUsuarioCoordinador,
-          tipo_notificacion: 'Servicio Confirmado',
-          canal: 'Sistema_Interno',
-          mensaje: `El cliente ha confirmado el servicio completado en la orden ${orden.numero_orden}.`,
-          fecha_enviada: fechaActual,
-          leida: false
-        });
-      }
-
-      if (notificaciones.length > 0) {
-        const { error: notifError } = await supabase
+        await supabase
           .from('notificaciones')
-          .insert(notificaciones);
+          .insert([
+            {
+              id_orden: orden.id_orden,
+              id_destinatario: idUsuarioTecnico,
+              tipo_notificacion: 'Confirmación de Servicio',
+              canal: 'Sistema_Interno',
+              mensaje: `El cliente ha confirmado el servicio`,
+              fecha_enviada: new Date().toISOString(),
+              leida: false
+            }
+          ]);
+      }
 
-        if (notifError) {
-          console.error('Error enviando notificaciones:', notifError);
-        } else {
-          console.log(`✅ ${notificaciones.length} notificaciones enviadas (Técnico y Coordinador)`);
+      // 6. Notificar a todos los coordinadores activos
+      const { data: coordinadoresData, error: coordinadoresError } = await supabase
+        .from('usuarios')
+        .select('id_usuario')
+        .eq('tipo_usuario', 'Coordinador')
+        .eq('estado', 'Activo');
+
+      // Crear notificaciones para todos los coordinadores activos
+      if (coordinadoresData && coordinadoresData.length > 0) {
+        const notificacionesCoordinadores = coordinadoresData
+          .filter(coord => coord.id_usuario != null)
+          .map(coord => {
+            const idDestinatario = typeof coord.id_usuario === 'string' 
+              ? parseInt(coord.id_usuario, 10) 
+              : coord.id_usuario;
+            
+            return {
+              id_orden: orden.id_orden,
+              id_destinatario: Number(idDestinatario),
+              tipo_notificacion: 'Servicio Confirmado por Cliente',
+              canal: 'Sistema_Interno',
+              mensaje: `El cliente ha confirmado que el servicio fue realizado satisfactoriamente.`,
+              fecha_enviada: new Date().toISOString(),
+              leida: false
+            };
+          });
+
+        if (notificacionesCoordinadores.length > 0) {
+          await supabase
+            .from('notificaciones')
+            .insert(notificacionesCoordinadores);
         }
       }
 
-      // 6. Log de auditoría
+      // 7. Log de auditoría
       await supabase
         .from('logs_auditoria')
         .insert([
@@ -340,7 +323,15 @@ export default function ConfirmacionServicio() {
         .eq('id_orden', orden.id_orden)
         .single();
 
-      const idUsuarioTecnico = ordenData?.tecnicos?.usuarios?.id_usuario;
+      // Manejar si tecnicos es array o objeto único, y si usuarios es array o objeto único
+      let idUsuarioTecnico: any = null;
+      if (ordenData?.tecnicos) {
+        const tecnico = Array.isArray(ordenData.tecnicos) ? ordenData.tecnicos[0] : (ordenData.tecnicos as any);
+        if (tecnico?.usuarios) {
+          const usuarios = tecnico.usuarios;
+          idUsuarioTecnico = Array.isArray(usuarios) ? (usuarios[0] as any)?.id_usuario : (usuarios as any)?.id_usuario;
+        }
+      }
 
       // 4. Obtener coordinador
       const { data: coordinadores } = await supabase
@@ -358,7 +349,7 @@ export default function ConfirmacionServicio() {
           id_destinatario: coordinadores.id_usuario,
           tipo_notificacion: 'Servicio Rechazado',
           canal: 'Sistema_Interno',
-          mensaje: `El cliente ha rechazado el servicio de la orden ${orden.numero_orden}. Se requiere revisión.`,
+          mensaje: `El cliente ha rechazado el servicio. Se requiere revisión.`,
           fecha_enviada: new Date().toISOString(),
           leida: false
         });
@@ -434,36 +425,36 @@ export default function ConfirmacionServicio() {
             </AlertDescription>
           </Alert>
         ) : (
-        <div className="grid gap-6">
+          <div className="grid gap-6">
             {ordenes.map((orden) => (
               <Card key={orden.id_orden} className="border-2">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
                         {orden.tipo_servicio}
-                    </CardTitle>
+                      </CardTitle>
                       <CardDescription>Orden: {orden.numero_orden}</CardDescription>
+                    </div>
+                    <Badge variant="outline" className="bg-orange-50">
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      Pendiente de Confirmación
+                    </Badge>
                   </div>
-                  <Badge variant="outline" className="bg-orange-50">
-                    <AlertTriangle className="h-3 w-3 mr-1" />
-                    Pendiente de Confirmación
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
                           <p className="text-muted-foreground flex items-center gap-1">
                             <User className="h-3 w-3" />
                             Técnico
                           </p>
                           <p className="font-medium">{orden.tecnico.nombre_completo}</p>
-                      </div>
-                      <div>
+                        </div>
+                        <div>
                           <p className="text-muted-foreground flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
                             Fecha de Finalización
@@ -471,10 +462,10 @@ export default function ConfirmacionServicio() {
                           <p className="font-medium">
                             {formatearFechaVenezuela(orden.ejecucion.fecha_fin)}
                           </p>
+                        </div>
                       </div>
-                    </div>
-                    
-                    <div>
+                      
+                      <div>
                         <p className="text-muted-foreground">Descripción del Problema</p>
                         <p className="font-medium mt-1">{orden.descripcion_solicitud}</p>
                       </div>
@@ -488,15 +479,15 @@ export default function ConfirmacionServicio() {
                               return <p className="text-muted-foreground italic">No especificado</p>;
                             }
                             
-                            // Parsear trabajo_realizado para separar trabajo, repuestos y recomendaciones
+                            // Parsear trabajo_realizado para separar trabajo, equipos y recomendaciones
                             const partes = trabajo.split('\n\n');
                             const trabajoRealizado = partes[0] || '';
-                            let repuestos = '';
+                            let equipos = '';
                             let recomendaciones = '';
                             
                             partes.forEach((parte: string) => {
-                              if (parte.startsWith('Repuestos Utilizados:')) {
-                                repuestos = parte.replace('Repuestos Utilizados:', '').trim();
+                              if (parte.startsWith('Equipos Utilizados:')) {
+                                equipos = parte.replace('Equipos Utilizados:', '').trim();
                               } else if (parte.startsWith('Recomendaciones:')) {
                                 recomendaciones = parte.replace('Recomendaciones:', '').trim();
                               }
@@ -510,10 +501,10 @@ export default function ConfirmacionServicio() {
                                     <p className="text-sm whitespace-pre-wrap">{trabajoRealizado}</p>
                                   </div>
                                 )}
-                                {repuestos && (
+                                {equipos && (
                                   <div className="pt-2 border-t">
-                                    <p className="font-semibold text-sm mb-1">Repuestos utilizados:</p>
-                                    <p className="text-sm whitespace-pre-wrap">{repuestos}</p>
+                                    <p className="font-semibold text-sm mb-1">Equipos utilizados:</p>
+                                    <p className="text-sm whitespace-pre-wrap">{equipos}</p>
                                   </div>
                                 )}
                                 {recomendaciones && (
@@ -526,56 +517,56 @@ export default function ConfirmacionServicio() {
                             );
                           })()}
                         </div>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="p-4 bg-muted rounded-lg space-y-2">
-                    <p className="font-medium flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4" />
-                      Confirmación del Cliente
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      El técnico ha completado el trabajo. Por favor confirme que el servicio fue realizado satisfactoriamente.
-                    </p>
-                  </div>
+                    <div className="p-4 bg-muted rounded-lg space-y-2">
+                      <p className="font-medium flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4" />
+                        Confirmación del Cliente
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        El técnico ha completado el trabajo. Por favor confirme que el servicio fue realizado satisfactoriamente.
+                      </p>
+                    </div>
 
-                  <div className="space-y-2">
+                    <div className="space-y-2">
                       <Label htmlFor={`comentario-${orden.id_orden}`}>
-                      Comentarios (Opcional)
-                    </Label>
-                    <Textarea
+                        Comentarios (Opcional)
+                      </Label>
+                      <Textarea
                         id={`comentario-${orden.id_orden}`}
-                      placeholder="Agregue cualquier comentario sobre el servicio recibido..."
-                      rows={4}
+                        placeholder="Agregue cualquier comentario sobre el servicio recibido..."
+                        rows={4}
                         value={comentarios[orden.id_orden] || ""}
                         onChange={(e) => setComentarios(prev => ({ ...prev, [orden.id_orden]: e.target.value }))}
-                    />
-                  </div>
+                      />
+                    </div>
 
-                  <div className="flex gap-3">
-                    <Button 
-                      className="flex-1"
+                    <div className="flex gap-3">
+                      <Button 
+                        className="flex-1"
                         onClick={() => confirmarServicio(orden)}
                         disabled={procesando[orden.id_orden]}
-                    >
-                      <CheckCircle className="mr-2 h-4 w-4" />
+                      >
+                        <CheckCircle className="mr-2 h-4 w-4" />
                         {procesando[orden.id_orden] ? 'Confirmando...' : 'Confirmar Finalización'}
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      className="flex-1"
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        className="flex-1"
                         onClick={() => rechazarServicio(orden)}
                         disabled={procesando[orden.id_orden]}
-                    >
-                      <AlertTriangle className="mr-2 h-4 w-4" />
+                      >
+                        <AlertTriangle className="mr-2 h-4 w-4" />
                         {procesando[orden.id_orden] ? 'Rechazando...' : 'Reportar un Problema'}
-                    </Button>
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         )}
       </div>
     </Layout>

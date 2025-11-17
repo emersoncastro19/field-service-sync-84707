@@ -34,14 +34,20 @@ import ClientePerfil from "@/frontend/pages/cliente/Perfil";
 import ClienteCitas from "@/frontend/pages/cliente/Citas";
 import ClienteConfirmacionServicio from "@/frontend/pages/cliente/ConfirmacionServicio";
 import ClienteDetallesOrden from "@/frontend/pages/cliente/DetallesOrden";
+import ClienteNotificaciones from "@/frontend/pages/cliente/Notificaciones";
 import AgenteNuevaOrden from "@/frontend/pages/agente/NuevaOrden";
+import AgenteNotificaciones from "@/frontend/pages/agente/Notificaciones";
 import AgenteHistorial from "@/frontend/pages/agente/Historial";
 import AgenteCancelarOrden from "@/frontend/pages/agente/CancelarOrden";
 import AgenteDetallesOrden from "@/frontend/pages/agente/DetallesOrden";
 import AgenteValidarOrdenes from "@/frontend/pages/agente/ValidarOrdenes";
 import CoordinadorCitas from "@/frontend/pages/coordinador/Citas";
 import CoordinadorHistorial from "@/frontend/pages/coordinador/HistorialAsignaciones";
+import CoordinadorNotificaciones from "@/frontend/pages/coordinador/Notificaciones";
+import CoordinadorDetallesOrden from "@/frontend/pages/coordinador/DetallesOrden";
 import TecnicoDocumentar from "@/frontend/pages/tecnico/Documentar";
+import TecnicoDetallesOrden from "@/frontend/pages/tecnico/DetallesOrden";
+import TecnicoNotificaciones from "@/frontend/pages/tecnico/Notificaciones";
 import TecnicoReportarImpedimento from "@/frontend/pages/tecnico/ReportarImpedimento";
 import TecnicoGestionarEjecucion from "@/frontend/pages/tecnico/GestionarEjecucion";
 import TecnicoCitas from "@/frontend/pages/tecnico/Citas";
@@ -70,6 +76,7 @@ const App = () => (
             <Route path="/cliente/perfil" element={<ClientePerfil />} />
             <Route path="/cliente/citas" element={<ClienteCitas />} />
             <Route path="/cliente/confirmacion-servicio" element={<ClienteConfirmacionServicio />} />
+            <Route path="/cliente/notificaciones" element={<ClienteNotificaciones />} />
             <Route path="/agente" element={<Agente />} />
             <Route path="/agente/buscar" element={<BuscarCliente />} />
             <Route path="/agente/ordenes" element={<AgenteOrdenes />} />
@@ -78,11 +85,14 @@ const App = () => (
             <Route path="/agente/cancelar-orden" element={<AgenteCancelarOrden />} />
             <Route path="/agente/detalles-orden" element={<AgenteDetallesOrden />} />
             <Route path="/agente/validar-ordenes" element={<AgenteValidarOrdenes />} />
+            <Route path="/agente/notificaciones" element={<AgenteNotificaciones />} />
             <Route path="/coordinador" element={<Coordinador />} />
             <Route path="/coordinador/asignar" element={<AsignarOrdenes />} />
             <Route path="/coordinador/tecnicos" element={<Tecnicos />} />
             <Route path="/coordinador/citas" element={<CoordinadorCitas />} />
             <Route path="/coordinador/historial" element={<CoordinadorHistorial />} />
+            <Route path="/coordinador/notificaciones" element={<CoordinadorNotificaciones />} />
+            <Route path="/coordinador/detalles-orden" element={<CoordinadorDetallesOrden />} />
             <Route path="/tecnico" element={<Tecnico />} />
             <Route path="/tecnico/ordenes" element={<TecnicoOrdenes />} />
             <Route path="/tecnico/especialidades" element={<Especialidades />} />
@@ -91,6 +101,8 @@ const App = () => (
             <Route path="/tecnico/gestionar-ejecucion" element={<TecnicoGestionarEjecucion />} />
             <Route path="/tecnico/citas" element={<TecnicoCitas />} />
             <Route path="/tecnico/ordenes-completadas" element={<TecnicoOrdenesCompletadas />} />
+            <Route path="/tecnico/notificaciones" element={<TecnicoNotificaciones />} />
+            <Route path="/tecnico/detalles-orden" element={<TecnicoDetallesOrden />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/usuarios" element={<Usuarios />} />
             <Route path="/admin/roles" element={<Roles />} />

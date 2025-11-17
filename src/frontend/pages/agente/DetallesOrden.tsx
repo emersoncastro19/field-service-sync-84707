@@ -50,6 +50,19 @@ interface OrdenDetalle {
     fecha_programada: string;
     estado_cita: string;
   } | null;
+  ejecuciones?: Array<{
+    id_ejecucion: number;
+    fecha_inicio: string;
+    fecha_fin: string | null;
+    trabajo_realizado: string | null;
+    estado_resultado: string;
+    confirmacion_cliente: string;
+    imagenes?: Array<{
+      id_imagen: number;
+      url_imagen: string;
+      descripcion: string | null;
+    }>;
+  }>;
 }
 
 export default function DetallesOrden() {
@@ -247,7 +260,67 @@ export default function DetallesOrden() {
         // Continuar sin cita
       }
 
-      // 6. Formatear datos
+      // 6. Obtener ejecuciones e imágenes
+      let ejecucionesData: any[] = [];
+      let imagenesData: any[] = [];
+      try {
+        const { data: ejecuciones } = await supabase
+          .from('ejecuciones_servicio')
+          .select('*')
+          .eq('id_orden', idOrdenNum)
+          .order('fecha_inicio', { ascending: false });
+
+        ejecucionesData = ejecuciones || [];
+
+        if (ejecucionesData.length > 0) {
+          const ejecucionIds = ejecucionesData.map((e: any) => e.id_ejecucion);
+          
+          // Intentar cargar desde tabla imagenes_servicio
+          const { data: imagenes } = await supabase
+            .from('imagenes_servicio')
+            .select('*')
+            .in('id_ejecucion', ejecucionIds);
+          
+          if (imagenes && imagenes.length > 0) {
+            // Eliminar duplicados por URL
+            const urlsUnicas = new Set<string>();
+            imagenesData = imagenes.filter((img: any) => {
+              if (urlsUnicas.has(img.url_imagen)) {
+                return false; // Duplicado, omitir
+              }
+              urlsUnicas.add(img.url_imagen);
+              return true;
+            });
+          }
+          
+          // Si no hay suficientes imágenes en imagenes_servicio, complementar con imagenes_urls (solo si no hay en tabla)
+          if (imagenesData.length === 0) {
+            ejecucionesData.forEach((ejecucion: any) => {
+              if (ejecucion.imagenes_urls && Array.isArray(ejecucion.imagenes_urls)) {
+                // Eliminar duplicados del array JSON
+                const urlsUnicas = Array.from(new Set(ejecucion.imagenes_urls));
+                // Verificar que no estén ya en imagenesData
+                const urlsExistentes = new Set(imagenesData.map((img: any) => img.url_imagen));
+                urlsUnicas.forEach((url: string, index: number) => {
+                  if (!urlsExistentes.has(url)) {
+                    imagenesData.push({
+                      id_imagen: index + 1,
+                      id_ejecucion: ejecucion.id_ejecucion,
+                      id_orden: ejecucion.id_orden,
+                      url_imagen: url,
+                      descripcion: null
+                    });
+                  }
+                });
+              }
+            });
+          }
+        }
+      } catch (err: any) {
+        console.error('⚠️ Error obteniendo ejecuciones/imágenes:', err);
+      }
+
+      // 7. Formatear datos
       const ordenFormateada: OrdenDetalle = {
         id_orden: ordenData.id_orden,
         numero_orden: ordenData.numero_orden || `ORD-${ordenData.id_orden}`,
@@ -261,7 +334,15 @@ export default function DetallesOrden() {
         cliente: clienteInfo,
         tecnico: tecnicoInfo,
         coordinador: coordinadorInfo,
-        cita: citaInfo
+        cita: citaInfo,
+        ejecuciones: ejecucionesData.map((ejecucion: any) => ({
+          ...ejecucion,
+          imagenes: imagenesData.filter((img: any) => img.id_ejecucion === ejecucion.id_ejecucion).map((img: any) => ({
+            id_imagen: img.id_imagen,
+            url_imagen: img.url_imagen,
+            descripcion: img.descripcion
+          }))
+        }))
       };
 
       console.log('✅ Orden formateada:', ordenFormateada);
@@ -442,6 +523,104 @@ export default function DetallesOrden() {
                   </h3>
                   <p className="text-muted-foreground">{orden.direccion_servicio}</p>
                 </div>
+
+                {/* Mostrar ejecuciones y documentación si existen */}
+                {orden.ejecuciones && orden.ejecuciones.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="font-semibold mb-2 flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Ejecución del Servicio
+                    </h3>
+                    {orden.ejecuciones.map((ejecucion) => (
+                      <div key={ejecucion.id_ejecucion} className="border rounded-lg p-4 space-y-3">
+                        {ejecucion.trabajo_realizado && (
+                          <div>
+                            <p className="text-sm font-semibold mb-2">Documentación del Trabajo:</p>
+                            <div className="bg-gray-50 p-3 rounded space-y-3">
+                              {(() => {
+                                const trabajo = ejecucion.trabajo_realizado || '';
+                                if (!trabajo) {
+                                  return <p className="text-muted-foreground italic">No especificado</p>;
+                                }
+                                
+                                const partes = trabajo.split('\n\n');
+                                const trabajoRealizado = partes[0] || '';
+                                let equipos = '';
+                                let recomendaciones = '';
+                                
+                                partes.forEach((parte: string) => {
+                                  if (parte.startsWith('Equipos Utilizados:')) {
+                                    equipos = parte.replace('Equipos Utilizados:', '').trim();
+                                  } else if (parte.startsWith('Recomendaciones:')) {
+                                    recomendaciones = parte.replace('Recomendaciones:', '').trim();
+                                  }
+                                });
+                                
+                                return (
+                                  <div className="space-y-4">
+                                    {trabajoRealizado && (
+                                      <div>
+                                        <p className="font-semibold text-sm mb-1">Descripción del trabajo:</p>
+                                        <p className="text-sm whitespace-pre-wrap">{trabajoRealizado}</p>
+                                      </div>
+                                    )}
+                                    {equipos && (
+                                      <div className="pt-2 border-t">
+                                        <p className="font-semibold text-sm mb-1">Equipos utilizados:</p>
+                                        <p className="text-sm whitespace-pre-wrap">{equipos}</p>
+                                      </div>
+                                    )}
+                                    {recomendaciones && (
+                                      <div className="pt-2 border-t">
+                                        <p className="font-semibold text-sm mb-1">Recomendaciones:</p>
+                                        <p className="text-sm whitespace-pre-wrap">{recomendaciones}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Mostrar imágenes si existen */}
+                        {ejecucion.imagenes && ejecucion.imagenes.length > 0 && (
+                          <div>
+                            <p className="text-sm font-semibold mb-2">Fotografías del Trabajo:</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                              {ejecucion.imagenes.map((imagen) => (
+                                <div key={imagen.id_imagen} className="relative group">
+                                  <img
+                                    src={imagen.url_imagen}
+                                    alt={imagen.descripcion || `Imagen ${imagen.id_imagen}`}
+                                    className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
+                                    onClick={() => window.open(imagen.url_imagen, '_blank')}
+                                  />
+                                  {imagen.descripcion && (
+                                    <p className="text-xs text-muted-foreground mt-1 truncate">{imagen.descripcion}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex gap-4 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Estado:</p>
+                            <Badge>{ejecucion.estado_resultado}</Badge>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Confirmación Cliente:</p>
+                            <Badge variant={ejecucion.confirmacion_cliente === 'Confirmada' ? 'default' : 'outline'}>
+                              {ejecucion.confirmacion_cliente}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

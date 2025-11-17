@@ -196,20 +196,38 @@ export default function NotificationBell() {
     }
 
     // Navegar según el tipo de usuario y si hay orden
+    // Redirigir al módulo de validar/gestionar órdenes correspondiente
     if (notificacion.id_orden) {
       const tipoUsuario = usuario?.tipo_usuario;
       
       if (tipoUsuario === 'Cliente') {
-        navigate(`/cliente/detalles-orden?id=${notificacion.id_orden}`);
+        // Para clientes, si es una notificación de cita, redirigir a citas
+        if (notificacion.tipo_notificacion === 'Cita Programada' || 
+            notificacion.tipo_notificacion === 'Cita Reprogramada') {
+          navigate(`/cliente/citas`);
+        } else {
+          // Para todas las notificaciones relacionadas con órdenes, redirigir a detalles de la orden
+          navigate(`/cliente/detalles-orden?id=${notificacion.id_orden}`);
+        }
       } else if (tipoUsuario === 'Tecnico') {
-        // Para técnicos, navegar a gestionar ejecución (ahí pueden ver sus órdenes)
-        navigate(`/tecnico/gestionar-ejecucion`);
+        // Para técnicos, si es una notificación de cita confirmada, ir a mis citas
+        if (notificacion.tipo_notificacion === 'Cita Confirmada por Cliente') {
+          navigate(`/tecnico/citas`);
+        } else {
+          // Para todas las notificaciones relacionadas con órdenes, redirigir a detalles de la orden
+          navigate(`/tecnico/detalles-orden?id=${notificacion.id_orden}`);
+        }
       } else if (tipoUsuario === 'Coordinador') {
-        // Para coordinadores, navegar a asignar órdenes
-        navigate(`/coordinador/asignar`);
+        // Para coordinadores, si es una notificación de cita confirmada, ir a citas
+        if (notificacion.tipo_notificacion === 'Cita Confirmada por Cliente') {
+          navigate(`/coordinador/citas`);
+        } else {
+          // Para todas las notificaciones relacionadas con órdenes, redirigir a detalles de la orden
+          navigate(`/coordinador/detalles-orden?id=${notificacion.id_orden}`);
+        }
       } else if (tipoUsuario === 'Agente') {
-        // Para agentes, navegar a validar órdenes
-        navigate(`/agente/validar-ordenes`);
+        // Para agentes, redirigir a detalles de la orden
+        navigate(`/agente/detalles-orden?id=${notificacion.id_orden}`);
       }
     }
 
@@ -358,21 +376,18 @@ export default function NotificationBell() {
               className="w-full text-xs"
               onClick={() => {
                 setOpen(false);
-                // Navegar según el rol del usuario
+                // Navegar según el rol del usuario a su página de notificaciones
                 const tipoUsuario = usuario?.tipo_usuario;
                 if (tipoUsuario === 'Admin') {
                   navigate('/admin/notificaciones');
-                } else {
-                  // Para otros usuarios, navegar a su página principal de órdenes
-                  if (tipoUsuario === 'Cliente') {
-                    navigate('/cliente/ordenes');
-                  } else if (tipoUsuario === 'Tecnico') {
-                    navigate('/tecnico/ordenes');
-                  } else if (tipoUsuario === 'Coordinador') {
-                    navigate('/coordinador/asignar');
-                  } else if (tipoUsuario === 'Agente') {
-                    navigate('/agente/validar-ordenes');
-                  }
+                } else if (tipoUsuario === 'Cliente') {
+                  navigate('/cliente/notificaciones');
+                } else if (tipoUsuario === 'Tecnico') {
+                  navigate('/tecnico/notificaciones');
+                } else if (tipoUsuario === 'Coordinador') {
+                  navigate('/coordinador/notificaciones');
+                } else if (tipoUsuario === 'Agente') {
+                  navigate('/agente/notificaciones');
                 }
               }}
             >

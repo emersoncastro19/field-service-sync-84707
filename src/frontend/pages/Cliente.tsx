@@ -26,7 +26,7 @@ interface CitaResumen {
 export default function Cliente() {
   const { usuario } = useAuth();
   const { error, success } = useToast();
-  
+
   const [ordenes, setOrdenes] = useState<OrdenResumen[]>([]);
   const [citas, setCitas] = useState<CitaResumen[]>([]);
   const [ordenesCompletadas, setOrdenesCompletadas] = useState(0);
@@ -37,7 +37,7 @@ export default function Cliente() {
     if (usuario) {
       // Verificar si es un nuevo ingreso
       const nuevoIngreso = sessionStorage.getItem('nuevo_ingreso_Cliente');
-      
+
       if (nuevoIngreso === 'true') {
         // Mostrar mensaje solo en nuevo ingreso
         const timeoutId = setTimeout(() => {
@@ -48,7 +48,7 @@ export default function Cliente() {
           // Eliminar la marca para que no vuelva a aparecer hasta el próximo login
           sessionStorage.removeItem('nuevo_ingreso_Cliente');
         }, 1000);
-        
+
         return () => clearTimeout(timeoutId);
       }
     }
@@ -58,9 +58,7 @@ export default function Cliente() {
     if (usuario) {
       cargarDatos();
     }
-  }, [usuario]);
-
-  const cargarDatos = async () => {
+  }, [usuario]);  const cargarDatos = async () => {
     if (!usuario) return;
 
     try {
@@ -69,8 +67,8 @@ export default function Cliente() {
 
       // 1. Obtener el cliente
       // Convertir id_usuario a número si es necesario
-      const idUsuario = typeof usuario.id_usuario === 'string' 
-        ? parseInt(usuario.id_usuario, 10) 
+      const idUsuario = typeof usuario.id_usuario === 'string'
+        ? parseInt(usuario.id_usuario, 10)
         : usuario.id_usuario;
 
       const { data: clienteData, error: clienteError } = await supabase
@@ -84,7 +82,7 @@ export default function Cliente() {
         // Error crítico: no se puede continuar sin datos del cliente
         setTimeout(() => {
           error(
-            'Error', 
+            'Error',
             'No se pudo obtener la información del cliente. Por favor, recarga la página o contacta al administrador.'
           );
         }, 2000);
@@ -96,7 +94,7 @@ export default function Cliente() {
         console.error('No se encontró el cliente para el usuario:', idUsuario);
         setTimeout(() => {
           error(
-            'Error', 
+            'Error',
             'No se encontraron datos del cliente. Por favor, contacta al administrador para completar tu perfil.'
           );
         }, 2000);
@@ -183,9 +181,8 @@ export default function Cliente() {
     } finally {
       setCargando(false);
     }
-  };
-
-  const formatFecha = (fecha: string) => {
+  }; 
+ const formatFecha = (fecha: string) => {
     return new Date(fecha).toLocaleDateString('es-VE', {
       year: 'numeric',
       month: '2-digit',
@@ -229,7 +226,7 @@ export default function Cliente() {
               )}
             </div>
           </Card>
-          
+
           <Card className="bg-gradient-to-br from-secondary to-secondary/80 text-white">
             <div className="p-6">
               <Calendar className="h-8 w-8 mb-2" />
@@ -241,7 +238,7 @@ export default function Cliente() {
               )}
             </div>
           </Card>
-          
+
           <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
             <div className="p-6">
               <CheckCircle className="h-8 w-8 mb-2" />
@@ -253,7 +250,7 @@ export default function Cliente() {
               )}
             </div>
           </Card>
-          
+
           <Card className="bg-gradient-to-br from-orange-500 to-orange-600 text-white">
             <div className="p-6">
               <Bell className="h-8 w-8 mb-2" />
@@ -261,9 +258,8 @@ export default function Cliente() {
               <p className="text-3xl font-bold">0</p>
             </div>
           </Card>
-        </div>
-
-        {/* Acciones Rápidas */}
+        </div>        {
+/* Acciones Rápidas */}
         <div className="grid gap-6 lg:grid-cols-2">
           <DashboardCard
             title="Crear Nueva Orden"
@@ -300,9 +296,8 @@ export default function Cliente() {
               </Button>
             </div>
           </DashboardCard>
-        </div>
-
-        {/* Mis Órdenes de Servicio */}
+        </div>        {
+/* Mis Órdenes de Servicio */}
         <DashboardCard
           title="Mis Órdenes de Servicio"
           description="Historial de servicios solicitados"
