@@ -32,23 +32,19 @@ export default function Cliente() {
   const [ordenesCompletadas, setOrdenesCompletadas] = useState(0);
   const [cargando, setCargando] = useState(true);
 
-  // Mostrar mensaje de bienvenida solo cuando es un nuevo ingreso (después de login)
   useEffect(() => {
     if (usuario) {
-      // Verificar si es un nuevo ingreso
       const nuevoIngreso = sessionStorage.getItem('nuevo_ingreso_Cliente');
-
+      
       if (nuevoIngreso === 'true') {
-        // Mostrar mensaje solo en nuevo ingreso
         const timeoutId = setTimeout(() => {
           success(
             `Bienvenido/a, ${usuario.nombre_completo}`,
             'Has ingresado al panel de cliente. Aquí puedes gestionar tus órdenes y servicios.'
           );
-          // Eliminar la marca para que no vuelva a aparecer hasta el próximo login
           sessionStorage.removeItem('nuevo_ingreso_Cliente');
         }, 1000);
-
+        
         return () => clearTimeout(timeoutId);
       }
     }
@@ -58,15 +54,14 @@ export default function Cliente() {
     if (usuario) {
       cargarDatos();
     }
-  }, [usuario]);  const cargarDatos = async () => {
+  }, [usuario]); 
+ const cargarDatos = async () => {
     if (!usuario) return;
 
     try {
       setCargando(true);
       let erroresEncontrados: string[] = [];
 
-      // 1. Obtener el cliente
-      // Convertir id_usuario a número si es necesario
       const idUsuario = typeof usuario.id_usuario === 'string'
         ? parseInt(usuario.id_usuario, 10)
         : usuario.id_usuario;
@@ -79,7 +74,6 @@ export default function Cliente() {
 
       if (clienteError) {
         console.error('Error obteniendo cliente:', clienteError);
-        // Error crítico: no se puede continuar sin datos del cliente
         setTimeout(() => {
           error(
             'Error',
@@ -87,7 +81,7 @@ export default function Cliente() {
           );
         }, 2000);
         setCargando(false);
-        return; // Salir sin cargar más datos
+        return;
       }
 
       if (!clienteData) {
@@ -99,11 +93,8 @@ export default function Cliente() {
           );
         }, 2000);
         setCargando(false);
-        return; // Salir sin cargar más datos
-      }
-
-      // 2. Obtener órdenes activas (últimas 5)
-      try {
+        return;
+      }      try {
         const { data: ordenesData, error: ordenesError } = await supabase
           .from('ordenes_servicio')
           .select('id_orden, numero_orden, tipo_servicio, estado, fecha_solicitud')
@@ -118,12 +109,11 @@ export default function Cliente() {
         } else {
           setOrdenes(ordenesData || []);
         }
-      } catch (err) {
-        console.error('Error procesando órdenes:', err);
+      } catch (error) {
+        console.error('Error procesando órdenes:', error);
         erroresEncontrados.push('órdenes activas');
       }
 
-      // 3. Contar órdenes completadas
       try {
         const { count: completadasCount } = await supabase
           .from('ordenes_servicio')
@@ -135,10 +125,8 @@ export default function Cliente() {
       } catch (err) {
         console.error('Error contando órdenes completadas:', err);
         erroresEncontrados.push('conteo de órdenes');
-      }
-
-      // 4. Obtener próximas citas
-      try {
+      }   
+   try {
         const { data: citasData, error: citasError } = await supabase
           .from('citas')
           .select(`
@@ -164,9 +152,7 @@ export default function Cliente() {
         erroresEncontrados.push('próximas citas');
       }
 
-      // Solo mostrar error si hubo errores críticos
       if (erroresEncontrados.length > 0) {
-        // Esperar un poco antes de mostrar el error para que no interfiera con el mensaje de bienvenida
         setTimeout(() => {
           error('Advertencia', `No se pudieron cargar: ${erroresEncontrados.join(', ')}. El resto del dashboard está disponible.`);
         }, 2000);
@@ -174,15 +160,14 @@ export default function Cliente() {
 
     } catch (err: any) {
       console.error('Error crítico cargando datos:', err);
-      // Error crítico - mostrar después del mensaje de bienvenida
       setTimeout(() => {
         error('Error', err.message || 'No se pudieron cargar los datos del dashboard. Por favor, recarga la página.');
       }, 2000);
     } finally {
       setCargando(false);
     }
-  }; 
- const formatFecha = (fecha: string) => {
+  };  const 
+formatFecha = (fecha: string) => {
     return new Date(fecha).toLocaleDateString('es-VE', {
       year: 'numeric',
       month: '2-digit',
@@ -211,10 +196,8 @@ export default function Cliente() {
           <p className="text-muted-foreground">
             Bienvenido, {usuario?.nombre_completo}
           </p>
-        </div>
-
-        {/* Cards de Resumen */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        </div>        <
+div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="bg-gradient-to-br from-primary to-primary/80 text-white">
             <div className="p-6">
               <FileText className="h-8 w-8 mb-2" />
@@ -258,9 +241,8 @@ export default function Cliente() {
               <p className="text-3xl font-bold">0</p>
             </div>
           </Card>
-        </div>        {
-/* Acciones Rápidas */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        </div>     
+   <div className="grid gap-6 lg:grid-cols-2">
           <DashboardCard
             title="Crear Nueva Orden"
             description="Solicita un nuevo servicio técnico"
@@ -296,9 +278,8 @@ export default function Cliente() {
               </Button>
             </div>
           </DashboardCard>
-        </div>        {
-/* Mis Órdenes de Servicio */}
-        <DashboardCard
+        </div>   
+     <DashboardCard
           title="Mis Órdenes de Servicio"
           description="Historial de servicios solicitados"
           icon={FileText}
@@ -368,9 +349,7 @@ export default function Cliente() {
       </div>
     </Layout>
   );
-}
-
-function Card({ className, children }: { className?: string; children: React.ReactNode }) {
+}function Card({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
     <div className={`rounded-lg shadow-md ${className}`}>
       {children}
