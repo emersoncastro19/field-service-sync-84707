@@ -120,7 +120,7 @@ export default function TecnicoCitas() {
         .from('citas')
         .select('*')
         .in('id_orden', ordenIds)
-        .order('fecha_programada', { ascending: true });
+        .order('fecha_programada', { ascending: false });
 
       if (citasError) throw citasError;
 
@@ -212,7 +212,7 @@ export default function TecnicoCitas() {
           .from('citas')
           .select('*')
           .in('id_orden', ordenIds)
-          .order('fecha_programada', { ascending: true });
+          .order('fecha_programada', { ascending: false });
         
         if (citasActualizadasError) {
           console.warn('Error recargando citas actualizadas:', citasActualizadasError);

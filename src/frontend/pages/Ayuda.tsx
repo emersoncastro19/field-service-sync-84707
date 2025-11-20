@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Layout from "@/frontend/components/Layout";
 import DashboardCard from "@/frontend/components/DashboardCard";
 import { Button } from "@/frontend/components/ui/button";
-import { Info, BookOpen, HelpCircle, Mail, Package, Calendar, Phone, Lightbulb } from "lucide-react";
+import { Info, BookOpen, HelpCircle, Mail, Package, Calendar, Phone, Lightbulb, Download } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/frontend/components/ui/accordion";
 import { useAuth } from "@/frontend/context/AuthContext";
 
@@ -27,6 +27,33 @@ export default function Ayuda() {
     };
     
     return roleMap[usuario.tipo_usuario] || 'client';
+  };
+
+  // Función para descargar manuales
+  const descargarManual = (tipoManual: 'usuario' | 'analista') => {
+    const archivos = {
+      usuario: '/manuales/manual-usuario.pdf',
+      analista: '/manuales/manual-analista.pdf'
+    };
+
+    const nombreArchivos = {
+      usuario: 'Manual_de_Usuario.pdf',
+      analista: 'Manual_de_Analista.pdf'
+    };
+
+    const url = archivos[tipoManual];
+    const nombreArchivo = nombreArchivos[tipoManual];
+
+    // Crear elemento de enlace temporal para la descarga
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = nombreArchivo;
+    link.target = '_blank';
+    
+    // Agregar al DOM, hacer clic y remover
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Redirigir al login si no hay usuario (solo después de verificar que realmente no existe)
@@ -119,47 +146,56 @@ export default function Ayuda() {
           icon={BookOpen}
         >
           <div className="space-y-3">
-            <div className="grid gap-3 md:grid-cols-2">
-              <Button variant="outline" className="justify-start h-auto py-4">
-                <div className="flex flex-col items-start w-full">
-                  <div className="flex items-center gap-2 mb-1">
-                    <BookOpen className="h-4 w-4" />
-                    <span className="font-semibold">Manual de Cliente</span>
+            {/* Mostrar manuales según el tipo de usuario */}
+            {getRole() === 'client' ? (
+              // Solo Manual de Usuario para clientes
+              <div className="grid gap-3">
+                <Button 
+                  variant="outline" 
+                  className="justify-start h-auto py-4"
+                  onClick={() => descargarManual('usuario')}
+                >
+                  <div className="flex flex-col items-start w-full">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Download className="h-4 w-4" />
+                      <span className="font-semibold">Manual de Usuario</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">Guía completa para usar el sistema como cliente</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">Cómo crear y gestionar órdenes</span>
-                </div>
-              </Button>
-              
-              <Button variant="outline" className="justify-start h-auto py-4">
-                <div className="flex flex-col items-start w-full">
-                  <div className="flex items-center gap-2 mb-1">
-                    <BookOpen className="h-4 w-4" />
-                    <span className="font-semibold">Manual de Técnico</span>
+                </Button>
+              </div>
+            ) : (
+              // Manual de Usuario y Manual de Analista para el resto de usuarios
+              <div className="grid gap-3 md:grid-cols-2">
+                <Button 
+                  variant="outline" 
+                  className="justify-start h-auto py-4"
+                  onClick={() => descargarManual('usuario')}
+                >
+                  <div className="flex flex-col items-start w-full">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Download className="h-4 w-4" />
+                      <span className="font-semibold">Manual de Usuario</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">Guía completa para usar el sistema</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">Gestión de servicios y reportes</span>
-                </div>
-              </Button>
-              
-              <Button variant="outline" className="justify-start h-auto py-4">
-                <div className="flex flex-col items-start w-full">
-                  <div className="flex items-center gap-2 mb-1">
-                    <BookOpen className="h-4 w-4" />
-                    <span className="font-semibold">Guía de Coordinador</span>
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="justify-start h-auto py-4"
+                  onClick={() => descargarManual('analista')}
+                >
+                  <div className="flex flex-col items-start w-full">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Download className="h-4 w-4" />
+                      <span className="font-semibold">Manual de Analista</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">Análisis avanzado y reportes del sistema</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">Asignación y supervisión</span>
-                </div>
-              </Button>
-              
-              <Button variant="outline" className="justify-start h-auto py-4">
-                <div className="flex flex-col items-start w-full">
-                  <div className="flex items-center gap-2 mb-1">
-                    <BookOpen className="h-4 w-4" />
-                    <span className="font-semibold">Tutoriales en Video</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">Aprende con videos paso a paso</span>
-                </div>
-              </Button>
-            </div>
+                </Button>
+              </div>
+            )}
           </div>
         </DashboardCard>
 
@@ -191,14 +227,10 @@ export default function Ayuda() {
             <p className="text-sm text-muted-foreground">
               Si no encuentras la respuesta que buscas, nuestro equipo de soporte está disponible para ayudarte.
             </p>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3">
               <Button className="w-full">
                 <Mail className="mr-2 h-4 w-4" />
                 Enviar Email
-              </Button>
-              <Button variant="outline" className="w-full">
-                <HelpCircle className="mr-2 h-4 w-4" />
-                Chat en Vivo
               </Button>
             </div>
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">

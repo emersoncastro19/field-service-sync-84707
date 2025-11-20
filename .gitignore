@@ -44,3 +44,6 @@ build
 # yarn.lock
 # pnpm-lock.yaml
 # bun.lockb
+
+# Vercel
+.vercel
